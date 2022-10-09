@@ -1,0 +1,18 @@
+2022-01-06 - Update 98_HELLO.pm
+
+fix critic warning
+2021-12-09 - Update 98_HELLO.pm
+
+generate perlcritic error
+2021-02-14 - Add workflow for perlcritc check (#2)
+
+* Add workflow for perlcritc
+
+* Update 98_HELLO.pm
+
+Fix perlcritic errors
+2021-02-14 - Fixed perlcritic erros
+2021-01-16 - Update 98_HELLO.pm
+
+Cause critic error
+2021-01-06 - Initial commit
