@@ -2,10 +2,11 @@ package main;
 use strict;
 use warnings;
 use HttpUtils;
+use vars qw(%data);
 
 my $Module_Version = '0.0.4 - 16.10.2022';
 
-my $AttrList = "MatrixRoom MatrixSender " . $readingFnAttributes;
+my $AttrList = "MatrixRoom MatrixSender MatrixMessage " . $readingFnAttributes;
 
 sub Matrix_PerformHttpRequest($$$)
 {
@@ -13,17 +14,15 @@ sub Matrix_PerformHttpRequest($$$)
 	my $now  = gettimeofday();
     my $name = $hash->{NAME};
     my $param = {
-                    url        => $hash->{server}."/_matrix/client/v3/login", #/register",
-					#data       => '{"username":"'.$hash->{user}.'", "password":"'.$hash->{password}.'", "auth": {"session":"'.$hash->{session}.'","type":"m.login.dummy"}}',
                     timeout    => 10,
-                    hash       => $hash,                                                                                 # Muss gesetzt werden, damit die Callback funktion wieder $hash hat
-                    method     => "POST",                                                                                 # Lesen von Inhalten
-                    header     => "User-Agent: HttpUtils/2.2.3\r\nAccept: application/json",                            # Den Header gemäß abzufragender Daten ändern
-                    callback   => \&Matrix_ParseHttpResponse                                                                  # Diese Funktion soll das Ergebnis dieser HTTP Anfrage bearbeiten
+                    hash       => $hash,                                      # Muss gesetzt werden, damit die Callback funktion wieder $hash hat
+					def        => $def,
+                    method     => "POST",                                     # standard, sonst überschreiben
+                    header     => "User-Agent: HttpUtils/2.2.3\r\nAccept: application/json",  # Den Header gemäß abzufragender Daten setzen
+                    callback   => \&Matrix_ParseHttpResponse                  # Diese Funktion soll das Ergebnis dieser HTTP Anfrage bearbeiten
                 };
-    $hash->{BUSY}  = $hash->{BUSY} + 1;                                   # queue is busy until response is received
-    $hash->{stage} = $def;
-	$hash->{'LASTSEND'} = $now;                                # remember when last sent
+    $data{MATRIX}{"$name"}{"busy"} = $data{MATRIX}{"$name"}{"busy"} + 1;      # queue is busy until response is received
+	$data{MATRIX}{"$name"}{'LASTSEND'} = $now;                                # remember when last sent
 	my $device_id = ReadingsVal($name, 'device_id', undef) ? ', "device_id":"'.ReadingsVal($name, 'device_id', undef).'"' : "";
 	if ($def eq "register"){
       $param->{'url'} =  $hash->{server}."/_matrix/client/v3/register";
@@ -31,7 +30,7 @@ sub Matrix_PerformHttpRequest($$$)
 	}
 	if ($def eq"reg2"){
       $param->{'url'} =  $hash->{server}."/_matrix/client/v3/register";
-      $param->{'data'} = '{"username":"'.$hash->{user}.'", "password":"'.$hash->{password}.'", "auth": {"session":"'.$hash->{session}.'","type":"m.login.dummy"}}';
+      $param->{'data'} = '{"username":"'.$hash->{user}.'", "password":"'.$hash->{password}.'", "auth": {"session":"'.$data{MATRIX}{"$name"}{"session"}.'","type":"m.login.dummy"}}';
 	}
 	if ($def eq "login"){
       $param->{'url'} =  $hash->{server}."/_matrix/client/v3/login";
@@ -40,17 +39,17 @@ sub Matrix_PerformHttpRequest($$$)
 	}
 	if ($def eq "refresh"){              
       $param->{'url'} =  $hash->{server}.'/_matrix/client/v1/refresh'; 
-      $param->{'data'} = '{"refresh_token": "'.ReadingsVal($name, '.refresh_token','xx').'"}';
+      $param->{'data'} = '{"refresh_token": "'.$data{MATRIX}{"$name"}{"refresh_token"}.'"}';
 	}
 	if ($def eq "wellknown"){
       $param->{'url'} =  $hash->{server}."/.well-known/matrix/client";
  	}
 	if ($def eq "msg"){              
-      $param->{'url'} =  $hash->{server}.'/_matrix/client/r0/rooms/'.ReadingsVal($name, 'room', '!!').'/send/m.room.message?access_token='.ReadingsVal($name, '.access_token', 'xx');
+      $param->{'url'} =  $hash->{server}.'/_matrix/client/r0/rooms/'.AttrVal($name, 'MatrixMessageRoom', '!!').'/send/m.room.message?access_token='.$data{MATRIX}{"$name"}{"access_token"};
       $param->{'data'} = '{"msgtype":"m.text", "body":"'.$value.'"}';
 	}
 	if ($def eq "pollstart"){              
-      $param->{'url'} =  $hash->{server}.'/_matrix/client/v3/rooms/'.ReadingsVal($name, 'room', '!!').'/send/m.poll.start?access_token='.ReadingsVal($name, '.access_token', 'xx');
+      $param->{'url'} =  $hash->{server}.'/_matrix/client/v3/rooms/'.AttrVal($name, 'MatrixMessageRoom', '!!').'/send/m.poll.start?access_token='.$data{MATRIX}{"$name"}{"access_token"};
       $param->{'data'} = '{"org.matrix.msc3381.poll.start": {"max_selections": 1,'.
       '"question": {"org.matrix.msc1767.text": "[Kategorie] Frage"},'.
 	  '"kind": "org.matrix.msc3381.poll.undisclosed",'.
@@ -58,7 +57,7 @@ sub Matrix_PerformHttpRequest($$$)
 	  '"org.matrix.msc1767.text": "[Kategorie] Frage\nAntwort1\nAntwort2"}}';
 	}
 	if ($def eq "pollend"){              
-      $param->{'url'} =  $hash->{server}.'/_matrix/client/v3/rooms/'.ReadingsVal($name, 'room', '!!').'/send/m.poll.end?access_token='.ReadingsVal($name, '.access_token', 'xx');
+      $param->{'url'} =  $hash->{server}.'/_matrix/client/v3/rooms/'.AttrVal($name, 'MatrixMessageRoom', '!!').'/send/m.poll.end?access_token='.$data{MATRIX}{"$name"}{"access_token"};
 	  # ""'.ReadingsVal($name, 'questionEventId', '!!').'
       $param->{'data'} = '{"m.relates_to": {"rel_type": "m.reference","event_id": "$8v_5pJZY9Ql_x93TfoHmqSBTiY6IYNdRpqiJuhMylxo"},"org.matrix.msc3381.poll.end": {},'.
                 '"org.matrix.msc1767.text": "Antort '.ReadingsVal($name, "answer", "").' erhalten von '.ReadingsVal($name, "sender", "").'"}';
@@ -72,20 +71,20 @@ sub Matrix_PerformHttpRequest($$$)
 		} else {
 			$full_state = "";
 		}
-		$param->{'url'} =  $hash->{server}.'/_matrix/client/r0/sync?access_token='.ReadingsVal($name, '.access_token', 'xx').$since.$full_state.'&timeout=50000&filter='.ReadingsVal($name, 'filter_id',0);
+		$param->{'url'} =  $hash->{server}.'/_matrix/client/r0/sync?access_token='.$data{MATRIX}{"$name"}{"access_token"}.$since.$full_state.'&timeout=50000&filter='.ReadingsVal($name, 'filter_id',0);
 		$param->{'method'} = 'GET';
 		$param->{'timeout'} = 60;
 	}
 	if ($def eq "filter"){
       if ($value){ # get
-		  $param->{'url'} =  $hash->{server}.'/_matrix/client/v3/user/'.ReadingsVal($name, "user_id",0).'/filter/'.$value.'?access_token='.ReadingsVal($name, '.access_token', 'xx');
+		  $param->{'url'} =  $hash->{server}.'/_matrix/client/v3/user/'.ReadingsVal($name, "user_id",0).'/filter/'.$value.'?access_token='.$data{MATRIX}{"$name"}{"access_token"};
 		  $param->{'method'} = 'GET';
 	  } else {	  
-		  $param->{'url'} =  $hash->{server}.'/_matrix/client/v3/user/'.ReadingsVal($name, "user_id",0).'/filter?access_token='.ReadingsVal($name, '.access_token', 'xx');
+		  $param->{'url'} =  $hash->{server}.'/_matrix/client/v3/user/'.ReadingsVal($name, "user_id",0).'/filter?access_token='.$data{MATRIX}{"$name"}{"access_token"};
 		  $param->{'data'} = '{';
 		  $param->{'data'} .= '"event_fields": ["type","content","sender"],';
 		  $param->{'data'} .= '"event_format": "client", ';
-		  $param->{'data'} .= '"presence": { "senders": [ "@xx:example.com"]}';
+		  $param->{'data'} .= '"presence": { "senders": [ "@xx:example.com"]}'; # no presence
 		  #$param->{'data'} .= '"room": { "ephemeral": {"rooms": ["'.AttrVal($name, 'MatrixRoom', '!!').'"],"types": ["m.receipt"]}, "state": {"types": ["m.room.*"]},"timeline": {"types": ["m.room.message"] } }';
 		  $param->{'data'} .= '}';
 	  }
@@ -99,13 +98,14 @@ sub Matrix_PerformHttpRequest($$$)
     Log3 $name, 5, $test;
           
     HttpUtils_NonblockingGet($param);   #  Starten der HTTP Abfrage. Es gibt keinen Return-Code. 
-	return undef; #"connect"; #$test;
+	return undef; 
 }
 
 sub Matrix_ParseHttpResponse($)
 {
     my ($param, $err, $data) = @_;
     my $hash = $param->{hash};
+	my $def = $param->{def};
     my $name = $hash->{NAME};
 	my $now  = gettimeofday();
 	my $nextRequest = "";
@@ -113,64 +113,61 @@ sub Matrix_ParseHttpResponse($)
     readingsBeginUpdate($hash);
 	###readingsBulkUpdate($hash, "httpHeader", $param->{httpheader});
 	readingsBulkUpdate($hash, "httpStatus", $param->{code});
-	$hash->{STATE} = $hash->{stage}.' - '.$param->{code};
+	$hash->{STATE} = $def.' - '.$param->{code};
     if($err ne "") {                                                         # wenn ein Fehler bei der HTTP Abfrage aufgetreten ist
         Log3 $name, 3, "error while requesting ".$param->{url}." - $err";    # Eintrag fürs Log
         readingsBulkUpdate($hash, "fullResponse", "ERROR ".$err);            # Readings erzeugen
-		$hash->{FAILS} = 3;
+		$data{MATRIX}{"$name"}{"FAILS"} = 3;
     }
     elsif($data ne "") {                                                     # wenn die Abfrage erfolgreich war ($data enthält die Ergebnisdaten des HTTP Aufrufes)
-		Log3 $name, 3, $hash->{stage}." returned: $data";              # Eintrag fürs Log
+		Log3 $name, 3, $def." returned: $data";              # Eintrag fürs Log
 		my $decoded = eval { decode_json($data) };
 		Log3 $name, 2, "$name: json error: $@ in data" if( $@ );
         if ($param->{code} == 200){
-			$hash->{FAILS} = 0;
+			$data{MATRIX}{"$name"}{"FAILS"} = 0;
 		} else {
-			$hash->{FAILS}++;
+			$data{MATRIX}{"$name"}{"FAILS"}++;
 		}
 		
 		# default next request
 		$nextRequest = "sync" ;
         # An dieser Stelle die Antwort parsen / verarbeiten mit $data
-		# {"errcode":"M_UNKNOWN_TOKEN","error":"refresh token does not exist"}
+		
+		# "errcode":"M_UNKNOWN_TOKEN: login or refresh
 		my $errcode = $decoded->{'errcode'} ? $decoded->{'errcode'} : "";
 		if ($decoded->{'errcode'} eq "M_UNKNOWN_TOKEN"){
 			if ($decoded->{'error'} eq "Access token has expired"){
 				if ($decoded->{'soft_logout'} eq "true"){
-					#$hash->{polling} = $hash->{polling}.'; '.$param->{code}.' soft_logout->refresh';
 					$nextRequest = 'refresh';
 				}else{
-					#$hash->{polling} = $hash->{polling}.'; '.$param->{code}.' hard_logout->login?';
+					$nextRequest = 'login';
 				}
 			} elsif ($decoded->{'error'} eq "refresh token does not exist"){
-				#$hash->{polling} = $hash->{polling}.'; '.$param->{code}.' soft_logout->refresh';
 				$nextRequest = 'login';
 			}
 		}
-        $hash->{session} = $decoded->{'session'};
-        $hash->{last_session} = $now;
+        
         readingsBulkUpdate($hash, "fullResponse", $data); 
-        if ($hash->{stage} eq "register"){
+        if ($def eq "register"){
+			$data{MATRIX}{"$name"}{"session"} = $decoded->{'session'};
 			$nextRequest = "reg2";
 		}
-        if ($param->{code} == 200 && ($hash->{stage} eq  "reg2" || $hash->{stage} eq  "login" || $hash->{stage} eq "refresh")){
+        if ($param->{code} == 200 && ($def eq  "reg2" || $def eq  "login" || $def eq "refresh")){
 			readingsBulkUpdate($hash, "user_id", $decoded->{'user_id'}) if ($decoded->{'user_id'});
 			readingsBulkUpdate($hash, "home_server", $decoded->{'home_server'}) if ($decoded->{'home_server'});
 			readingsBulkUpdate($hash, "device_id", $decoded->{'device_id'}) if ($decoded->{'device_id'});
+		  	readingsBulkUpdate($hash, "last_register", $param->{code}) if $def eq  "reg2";
+		  	readingsBulkUpdate($hash, "last_login",  $param->{code}) if $def eq  "login";
+		  	readingsBulkUpdate($hash, "last_refresh", $param->{code}) if $def eq  "refresh";
 			
-			readingsBulkUpdate($hash, ".expires_in_ms", $decoded->{'expires_in_ms'}) if ($decoded->{'expires_in_ms'});
-			readingsBulkUpdate($hash, ".refresh_token", $decoded->{'refresh_token'}) if ($decoded->{'refresh_token'}); 
-			readingsBulkUpdate($hash, ".access_token",  $decoded->{'access_token'}) if ($decoded->{'access_token'});
-			
-		  	readingsBulkUpdate($hash, "last_register", $param->{code}) if $hash->{stage} eq  "reg2";
-		  	readingsBulkUpdate($hash, "last_login",  $param->{code}) if $hash->{stage} eq  "login";
-		  	readingsBulkUpdate($hash, "last_refresh", $param->{code}) if $hash->{stage} eq  "refresh";
-			$hash->{polling} = '200 login' if $hash->{stage} eq  "login";
+			$data{MATRIX}{"$name"}{"expires"} = $decoded->{'expires_in_ms'} if ($decoded->{'expires_in_ms'});
+			$data{MATRIX}{"$name"}{"refresh_token"} = $decoded->{'refresh_token'} if ($decoded->{'refresh_token'}); 
+			$data{MATRIX}{"$name"}{"access_token"} =  $decoded->{'access_token'} if ($decoded->{'access_token'});
 		}
-        if ($hash->{stage} eq "wellknown"){
+        if ($def eq "wellknown"){
 			# https://spec.matrix.org/unstable/client-server-api/
 		}
-        if ($param->{code} == 200 && $hash->{stage} eq "sync"){
+        if ($param->{code} == 200 && $def eq "sync"){
 			readingsBulkUpdate($hash, "since", $decoded->{'next_batch'}) if ($decoded->{'next_batch'});
 			# roomlist
 			my $list = $decoded->{'rooms'}->{'join'};
@@ -219,113 +216,38 @@ sub Matrix_ParseHttpResponse($)
 				}
 			}
 		}
-        if ($hash->{stage} eq "filter"){
+        if ($def eq "filter"){
 			readingsBulkUpdate($hash, "filter_id", $decoded->{'filter_id'}) if ($decoded->{'filter_id'});
 		}
-        if ($hash->{stage} eq "msg" || $hash->{stage} eq "pollstart" || $hash->{stage} eq "pollend"){
+        if ($def eq "msg" || $def eq "pollstart" || $def eq "pollend"){
 			readingsBulkUpdate($hash, "event_id", $decoded->{'event_id'}) if ($decoded->{'event_id'});
 			#m.relates_to
 		}
 	}
     readingsEndUpdate($hash, 1);
-    $hash->{BUSY}        = $hash->{BUSY} - 1;                                   # queue is busy until response is received
-    if ($hash->{stage} eq "sync" && $nextRequest eq "sync" && ReadingsVal($name,'poll',0) == 1 && $hash->{FAILS} < 3){
-		#$hash->{polling} = $hash->{polling}.'; '.$param->{code}.' sync=>sync';
+    $data{MATRIX}{"$name"}{"busy"} = $data{MATRIX}{"$name"}{"busy"} + 1;      # queue is busy until response is received
+    if ($def eq "sync" && $nextRequest eq "sync" && ReadingsVal($name,'poll',0) == 1 && $data{MATRIX}{"$name"}{"FAILS"} < 3){
 		Matrix_PerformHttpRequest($hash, $nextRequest, '');
-	} elsif ($nextRequest ne "" && ReadingsVal($name,'poll',0) == 1 && $hash->{FAILS} < 3) {
-		#$hash->{polling} = $hash->{polling}.'; '.$param->{code}.' '.$hash->{stage}.'->'.$nextRequest;
+	} elsif ($nextRequest ne "" && ReadingsVal($name,'poll',0) == 1 && $data{MATRIX}{"$name"}{"FAILS"} < 3) {
 		Matrix_PerformHttpRequest($hash, $nextRequest, '');
 	}
     # Damit ist die Abfrage zuende.
-    # Evtl. einen InternalTimer neu schedulen
-}
-
-#############################################################################################
-# called when the device gets renamed,
-# in this case we then also need to rename the key in the token store and ensure it is recoded with new name
-sub Matrix_Rename($$) {
-    my ($new,$old) = @_;
-    
-    my $nhash = $defs{$new};
-    
-    #my $token = Matrix_readToken( $nhash, $old );
-    #Matrix_storeToken( $nhash, $token );
-
-    # remove old token with old name
-    my $index_old = "Matrix_" . $old . "_token";
-    #setKeyValue($index_old, undef); 
-}
-
-sub Matrix_Poll{
-	#InternalTimer(gettimeofday()+$wait, "Matrix_UpdatePoll", $hash,0); 
-
-}
-
-
-sub Matrix_ResetPolling($) {
-  my ($hash) = @_;
-  my $name = $hash->{NAME};
-
-  Log3 $name, 4, "Matrix_ResetPolling $name: called ";
-
-  RemoveInternalTimer($hash);
-
-  HttpUtils_Close( $hash->{HU_UPD_PARAMS} ); 
-  HttpUtils_Close( $hash->{HU_DO_PARAMS} ); 
-  
-  $hash->{WAIT} = 0;
-  $hash->{FAILS} = 0;
-
-  # let all existing methods first run into block
-  $hash->{POLLING} = -1;
-  
-  # wait some time before next polling is starting
-  InternalTimer(gettimeofday()+30, "Matrix_RestartPolling", $hash,0); 
-
-  Log3 $name, 4, "Matrix_ResetPolling $name: finished ";
-
-}
-
-  
-######################################
-#  make sure a reinitialization is triggered on next update
-#  
-sub Matrix_RestartPolling($) {
-  my ($hash) = @_;
-  my $name = $hash->{NAME};
-
-  Log3 $name, 4, "Matrix_RestartPolling $name: called ";
-
-  # Now polling can start
-  $hash->{POLLING} = 0;
-
-  # wait some time before next polling is starting
-  Matrix_UpdatePoll($hash);
-
-  Log3 $name, 4, "Matrix_RestartPolling $name: finished ";
-
 }
 
 sub Matrix_Initialize {
     my ($hash) = @_;
-
+	
     $hash->{DefFn}      = \&Matrix_Define;
     $hash->{UndefFn}    = \&Matrix_Undef;
     $hash->{SetFn}      = \&Matrix_Set;
     $hash->{GetFn}      = \&Matrix_Get;
     $hash->{AttrFn}     = \&Matrix_Attr;
     $hash->{ReadFn}     = \&Matrix_Read;
-   # $hash->{RenameFn}   = \&Matrix_Rename;
+    $hash->{RenameFn}   = \&Matrix_Rename;
 
     $hash->{AttrList} = $AttrList;
 	$hash->{STATE} = "paused";
-    $hash->{FAILS} = 0;
-    $hash->{POLLING} = -1;
-	$hash->{ModuleVersion} = $Module_Version;    
-	$hash->{polling} = undef;
-
-	my $encoded = to_json($hash->{NAME});
-    Log3 "Matrix", 1, "Matrix_Initialize: $encoded";
+	$hash->{ModuleVersion} = $Module_Version;   
 }
 
 sub Matrix_Define {
@@ -340,13 +262,42 @@ sub Matrix_Define {
     $hash->{server} = $param[2];
     $hash->{user} = $param[3];
     $hash->{password} = $param[4];
+	
+	my $name = $param[0];
+    $data{MATRIX}{"$name"}{"FAILS"} = 0;
+    $data{MATRIX}{"$name"}{"busy"} = 0;      # queue is busy until response is received
+	$data{MATRIX}{"$name"}{'LASTSEND'} = 0;  # remember when last sent
+	$data{MATRIX}{"$name"}{"expires"} = 0;
+	$data{MATRIX}{"$name"}{"refresh_token"} = ""; 
+	$data{MATRIX}{"$name"}{"access_token"} =  "";
+	$data{MATRIX}{"$name"}{"session"} = ""; # used for register
     return ;
 }
 
 sub Matrix_Undef {
     my ($hash, $arg) = @_; 
-    # nothing to do
+    my $name = $hash->{NAME};
+    # undef $data
+	$data{MATRIX}{"$name"} = undef;
     return ;
+}
+
+#############################################################################################
+# called when the device gets renamed, copy from telegramBot
+# in this case we then also need to rename the key in the token store and ensure it is recoded with new name
+sub Matrix_Rename($$) {
+    my ($new,$old) = @_;
+	$data{MATRIX}{"$new"} = $data{MATRIX}{"$old"};
+	$data{MATRIX}{"$old"} = undef;
+    
+    my $nhash = $defs{$new};
+    
+    #my $token = Matrix_readToken( $nhash, $old );
+    #Matrix_storeToken( $nhash, $token );
+
+    # remove old token with old name
+    my $index_old = "Matrix_" . $old . "_token";
+    #setKeyValue($index_old, undef); 
 }
 
 sub Matrix_Get {
@@ -360,7 +311,7 @@ sub Matrix_Get {
 		return Matrix_PerformHttpRequest($hash, $opt, '');
 	}
 	elsif ($opt eq "sync") {
-		$hash->{FAILS} = 0;
+		$data{MATRIX}{"$name"}{"FAILS"} = 0;
 		return Matrix_PerformHttpRequest($hash, $opt, '');
 	}
 	elsif ($opt eq "filter") {
@@ -497,9 +448,14 @@ sub Matrix_Attr {
         <br><br>
         Attributes:
         <ul>
-            <li><i>....</i> no|yes<br>
-                When you set formal to "yes", all output of <i>get</i> will be in a
-                more formal language. Default is "no".
+            <li><i>MatrixMessage</i> <room-id><br>
+                Set the room-id to wich are messages sent.
+            </li>
+            <li><i>MatrixRoom</i> <room-id 1> <room-id 2> ...<br>
+                Set the room-id's from wich are messages received.
+            </li>
+            <li><i>MatrixSender</i> <user 1> <user 2> ...<br>
+                Set the user's from wich are messages received.
             </li>
         </ul>
     </ul>
