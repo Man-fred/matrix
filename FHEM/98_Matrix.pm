@@ -1,10 +1,37 @@
+#!/usr/bin/perl -w
+
+##########################################################################
+# This file is part of the Matrix module for FHEM.
+#
+# Copyright (c) 2022 Man-fred
+#
+# You can find FHEM at www.fhem.de.
+#
+# This file is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# This file is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with FHEM/Matrix. If not, see <http://www.gnu.org/licenses/>.
+##########################################################################
+# Usage:
+#
+##########################################################################
+# $Id: 98_Matrix.pm 24969 2022-10-31 09:44:00Z Man-fred $
+
 package main;
 use strict;
 use warnings;
 use HttpUtils;
 use vars qw(%data);
 
-my $Module_Version = '0.0.4 - 16.10.2022';
+my $Module_Version = '0.0.5 - 31.10.2022';
 
 my $AttrList = "MatrixRoom MatrixSender MatrixMessage " . $readingFnAttributes;
 
@@ -381,8 +408,9 @@ sub Matrix_Attr {
 1;
 
 =pod
+=item summary Provides a Matrix-Chatbot.
+=item summary_DE Stellt einen Matrix-Chatbot bereit.
 =begin html
-
 <a name="Matrix"></a>
 <h3>Matrix</h3>
 <ul>
@@ -396,7 +424,7 @@ sub Matrix_Attr {
         Example: <code>define matrix Matrix matrix.com fhem asdf</code>
         <br><br>
         noch ins Englische: 
-		1. Anmerkung: Zur einfachen Einrichtung habe ich einen Matrix-Element-Client mit "--profile=fhem" gestartet und dort die Registrierung und die Räume vorbereitet. Achtung: alle Räume müssen noch unverschlüsselt sein um FHEM anzubinden. Alle Einladungen in Räume und Annehmen von Einladungen geht hier viel einfacher. Aus dem Element-Client dann die Raum-IDs merken für das Modul.
+		1. Anmerkung: Zur einfachen Einrichtung habe ich einen Matrix-Element-Client mit "--profile=fhem" gestartet und dort die Registrierung und die Räume vorbereitet. Achtung: alle Räume müssen noch unverschlüsselt sein um FHEM anzubinden. Alle Einladungen in Räume und Annehmen von Einladungen geht hier viel einfacher. Aus dem Element-Client dann die Raum-IDs merken für das Modul.<br/>
 		2. Anmerkung: sets, gets, Attribute und Readings müssen noch besser bezeichnet werden.
     </ul>
     <br>
@@ -417,14 +445,14 @@ sub Matrix_Attr {
               <li><i>refresh</i><br>
                   If logged in or in state "soft-logout" refresh gets a new access_token and syncs endless if poll is set to "1"</li>
               <li><i>filter</i><br>
-                  A Filter must be set for syncing in long poll. This filter is in the moment experimentell and must be set manual</li>
+                  A Filter must be set for syncing in long poll. This filter is in the moment experimentell and must be set manual to get the coresponding filter_id</li>
               <li><i>poll</i><br>
                   Defaults to "0": Set poll to "1" for starting the sync-loop</li>
               <li><i>poll.fullstate</i><br>
                   Defaults to "0": Set poll.fullstate to "1" for getting in the next sync a full state of all rooms</li>
-              <li><i>pollstart</i><br>
+              <li><i>question.start</i><br>
                   Experimental: start a in this time fixed question in the room from reading room. The first answer to the question is logged and ends the question.</li>
-              <li><i>pollend</i><br>
+              <li><i>question.end</i><br>
                   Experimental: stop a question also it is not answered.</li>
         </ul>
     </ul>
@@ -451,16 +479,100 @@ sub Matrix_Attr {
             <li><i>MatrixMessage</i> <room-id><br>
                 Set the room-id to wich are messages sent.
             </li>
+            <li><i>MatrixQuestion_.</i> <room-id><br>
+                Set the room-id to wich are messages sent.
+            </li>
             <li><i>MatrixRoom</i> <room-id 1> <room-id 2> ...<br>
                 Set the room-id's from wich are messages received.
             </li>
-            <li><i>MatrixSender</i> <user 1> <user 2> ...<br>
-                Set the user's from wich are messages received.
+            <li><i>MatrixSender</i> <code><user 1> <user 2> ...</code><br>
+                Set the user's from wich are messages received.<br><br>
+				Example: <code>attr matrix MatrixSender @name:matrix.server @second.name:matrix.server</code><br>
             </li>
         </ul>
     </ul>
 </ul>
-
 =end html
+=begin html_DE
+<a name="Matrix"></a>
+<h3>Matrix</h3>
+<ul>
+    <i>Matrix</i> stellt einen Client für Matrix-Synapse-Server bereit. It is in a very early development state. 
+    <br><br>
+    <a name="Matrixdefine"></a>
+    <b>Define</b>
+    <ul>
+        <code>define &lt;name&gt; <server> <user> <passwort></code>
+        <br><br>
+        Beispiel: <code>define matrix Matrix matrix.com fhem asdf</code>
+        <br><br>
+        1. Anmerkung: Zur einfachen Einrichtung habe ich einen Matrix-Element-Client mit "--profile=fhem" gestartet und dort die Registrierung und die Räume vorbereitet. Achtung: alle Räume müssen noch unverschlüsselt sein um FHEM anzubinden. Alle Einladungen in Räume und Annehmen von Einladungen geht hier viel einfacher. Aus dem Element-Client dann die Raum-IDs merken für das Modul.<br/>
+		2. Anmerkung: sets, gets, Attribute und Readings müssen noch besser bezeichnet werden.
+    </ul>
+    <br>
+    
+    <a name="Matrixset"></a>
+    <b>Set</b><br>
+    <ul>
+        <code>set &lt;name&gt; &lt;option&gt; &lt;wert&gt;</code>
+        <br><br>
+        You can <i>set</i> any value to any of the following options. 
+        <br><br>
+        Options:
+        <ul>
+              <li><i>register</i><br>
+                  noch ohne Funktion!</li>
+              <li><i>login</i><br>
+                  Login beim Matrix-Server und horche andauernd auf Nachrichten wenn poll auf "1" gesetzt ist</li>
+              <li><i>refresh</i><br>
+                  Wenn eingeloggt oder im Zustand "soft-logout" erhält man mit refresh einen neuen access_token. Wenn poll auf "1" gesetzt ist läuft dann wieder der Empfang andauernd.</li>
+              <li><i>filter</i><br>
+                  Ein Filter muss gesetzt sein um "Longpoll"-Anfragen an den Server schicken zu können. Der Filter muss hier einmalg gesetzt werden um vom Server eine Filter-ID zu erhalten.</li>
+              <li><i>poll</i><br>
+                  Zunächst "0": Auf "1" startet die Empfangsschleife.</li>
+              <li><i>poll.fullstate</i><br>
+                  Standard ist "0": Wenn poll.fullstate auf "1" gesetzt wird, werden beider nächsten Synchronisation alle Raumeigenschaften neu eingelesen.</li>
+              <li><i>question.start</i><br>
+                  Experimentell: zur Zeit noch feste Frage in den Raum des Attributs "MatrixMessage". Die erste Antwort steht im Reading "answer" und die Frage wird beendet.</li>
+              <li><i>question.end</i><br>
+                  Experimentell: Die gestartete Frage ohne Antwort beenden.</li>
+        </ul>
+    </ul>
+    <br>
 
+    <a name="Matrixget"></a>
+    <b>Get</b><br>
+    <ul>
+        <code>get &lt;name&gt; &lt;option&gt;</code>
+        <br><br>
+        
+    </ul>
+    <br>
+    
+    <a name="Matrixattr"></a>
+    <b>Attributes</b>
+    <ul>
+        <code>attr &lt;name&gt; &lt;attribute&gt; &lt;value&gt;</code>
+        <br><br>
+        
+        <br><br>
+        Attributes:
+        <ul>
+            <li><i>MatrixMessage</i> <room-id><br>
+                Set the room-id to wich are messages sent.
+            </li>
+            <li><i>MatrixQuestion_.</i> <room-id><br>
+                Set the room-id to wich are messages sent.
+            </li>
+            <li><i>MatrixRoom</i> <room-id 1> <room-id 2> ...<br>
+                Set the room-id's from wich are messages received.
+            </li>
+            <li><i>MatrixSender</i> <code><user 1> <user 2> ...</code><br>
+                Set the user's from wich are messages received.<br><br>
+				Example: <code>attr matrix MatrixSender @name:matrix.server @second.name:matrix.server</code><br>
+            </li>
+        </ul>
+    </ul>
+</ul>
+=end html_DE
 =cut
