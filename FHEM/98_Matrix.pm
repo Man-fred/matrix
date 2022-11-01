@@ -33,7 +33,7 @@ use vars qw(%data);
 
 my $Module_Version = '0.0.6';
 
-my $AttrList = "MatrixRoom MatrixSender MatrixMessage MatrixQuestion_" . $readingFnAttributes;
+my $AttrList = "MatrixRoom MatrixSender MatrixQuestion_0 MatrixQuestion_1 " . $readingFnAttributes;
 
 sub Matrix_PerformHttpRequest($$$)
 {
@@ -43,7 +43,8 @@ sub Matrix_PerformHttpRequest($$$)
     my $param = {
                     timeout    => 10,
                     hash       => $hash,                                      # Muss gesetzt werden, damit die Callback funktion wieder $hash hat
-                    def        => $def,
+                    def        => $def,                                       # sichern für eventuelle Wiederholung
+					value      => $value,                                     # sichern für eventuelle Wiederholung
                     method     => "POST",                                     # standard, sonst überschreiben
                     header     => "User-Agent: HttpUtils/2.2.3\r\nAccept: application/json",  # Den Header gemäß abzufragender Daten setzen
                     callback   => \&Matrix_ParseHttpResponse                  # Diese Funktion soll das Ergebnis dieser HTTP Anfrage bearbeiten
@@ -75,18 +76,29 @@ sub Matrix_PerformHttpRequest($$$)
       $param->{'url'} =  $hash->{server}.'/_matrix/client/r0/rooms/'.AttrVal($name, 'MatrixMessage', '!!').'/send/m.room.message?access_token='.$data{MATRIX}{"$name"}{"access_token"};
       $param->{'data'} = '{"msgtype":"m.text", "body":"'.$value.'"}';
 	}
-	if ($def eq "question.start"){              
-      $param->{'url'} =  $hash->{server}.'/_matrix/client/v3/rooms/'.AttrVal($name, 'MatrixMessage', '!!').'/send/m.poll.start?access_token='.$data{MATRIX}{"$name"}{"access_token"};
-      $param->{'data'} = '{"org.matrix.msc3381.poll.start": {"max_selections": 1,'.
-      '"question": {"org.matrix.msc1767.text": "[Kategorie] Frage"},'.
-	  '"kind": "org.matrix.msc3381.poll.undisclosed",'.
-	  '"answers": [{"id": "Antwort1", "org.matrix.msc1767.text": "Antwort1"},{"id":"Antwort2","org.matrix.msc1767.text": "Antwort2"}],'.
-	  '"org.matrix.msc1767.text": "[Kategorie] Frage\nAntwort1\nAntwort2"}}';
+	if ($def eq "question.start"){ 
+      $value = AttrVal($name, "MatrixQuestion_$value",$value); #  if ($value =~ /[0-9]/);
+	  my @question = split(':',$value);
+	  my $size = @question;
+	  $value =~ tr/:/<br>/;
+	  # min. question and one answer
+	  if (int(@question) >= 2){
+		  $param->{'url'} =  $hash->{server}.'/_matrix/client/v3/rooms/'.AttrVal($name, 'MatrixMessage', '!!').'/send/m.poll.start?access_token='.$data{MATRIX}{"$name"}{"access_token"};
+		  $param->{'data'} = '{"org.matrix.msc3381.poll.start": {"max_selections": 1,'.
+		  '"question": {"org.matrix.msc1767.text": "'.$question[0].'"},'.
+		  '"kind": "org.matrix.msc3381.poll.undisclosed",'.
+		  '"answers": [{"id": "'.$question[1].'", "org.matrix.msc1767.text": "'.$question[1].'"},{"id":"'.$question[2].'","org.matrix.msc1767.text": "'.$question[2].'"}],'.
+		  '"org.matrix.msc1767.text": "'.$value.'"}}';
+	  } else {
+		  Log3 $name, 3, "question.start: $value $size $question[0]";
+		  return;
+	  }
 	}
-	if ($def eq "question.end"){              
+	if ($def eq "question.end"){   
+	  $value = ReadingsVal($name, "question_id", "") if (!$value);
       $param->{'url'} =  $hash->{server}.'/_matrix/client/v3/rooms/'.AttrVal($name, 'MatrixMessage', '!!').'/send/m.poll.end?access_token='.$data{MATRIX}{"$name"}{"access_token"};
 	  # ""'.ReadingsVal($name, 'questionEventId', '!!').'
-      $param->{'data'} = '{"m.relates_to": {"rel_type": "m.reference","event_id": "'.ReadingsVal($name, "question_id", "").'"},"org.matrix.msc3381.poll.end": {},'.
+      $param->{'data'} = '{"m.relates_to": {"rel_type": "m.reference","event_id": "'.$value.'"},"org.matrix.msc3381.poll.end": {},'.
                 '"org.matrix.msc1767.text": "Antort '.ReadingsVal($name, "answer", "").' erhalten von '.ReadingsVal($name, "sender", "").'"}';
 	}
 	if ($def eq "sync"){  
@@ -133,6 +145,7 @@ sub Matrix_ParseHttpResponse($)
     my ($param, $err, $data) = @_;
     my $hash = $param->{hash};
 	my $def = $param->{def};
+	my $value = $param->{value};
     my $name = $hash->{NAME};
 	my $now  = gettimeofday();
 	my $nextRequest = "";
@@ -161,8 +174,10 @@ sub Matrix_ParseHttpResponse($)
         # An dieser Stelle die Antwort parsen / verarbeiten mit $data
 				
 		# "errcode":"M_UNKNOWN_TOKEN: login or refresh
+        readingsBulkUpdate($hash, "fullResponse", $data); 
 		my $errcode = $decoded->{'errcode'} ? $decoded->{'errcode'} : "";
 		if ($errcode eq "M_UNKNOWN_TOKEN"){
+			$data{MATRIX}{"$name"}{"repeat"} = $param if ($def ne "sync");
 			if ($decoded->{'error'} eq "Access token has expired"){
 				if ($decoded->{'soft_logout'} eq "true"){
 					$nextRequest = 'refresh';
@@ -174,7 +189,6 @@ sub Matrix_ParseHttpResponse($)
 			}
 		}
         
-        readingsBulkUpdate($hash, "fullResponse", $data); 
         if ($def eq "register"){
 			$data{MATRIX}{"$name"}{"session"} = $decoded->{'session'};
 			$nextRequest = "reg2";
@@ -224,10 +238,11 @@ sub Matrix_ParseHttpResponse($)
 								readingsBulkUpdate($hash, "sender", $sender); 
 								# command
 								
-							} else {
-								readingsBulkUpdate($hash, "message", 'ignoriert, nicht '.AttrVal($name, 'MatrixSender', '')); 
-								readingsBulkUpdate($hash, "sender", $sender); 
 							}
+							#else {
+							#	readingsBulkUpdate($hash, "message", 'ignoriert, nicht '.AttrVal($name, 'MatrixSender', '')); 
+							#	readingsBulkUpdate($hash, "sender", $sender); 
+							#}
 						} elsif ($tl->{'type'} eq "org.matrix.msc3381.poll.response"){
 							my $sender = $tl->{'sender'};
 							if (AttrVal($name, 'MatrixSender', '') =~ $sender){
@@ -236,6 +251,7 @@ sub Matrix_ParseHttpResponse($)
 								# poll.end and 
 								$nextRequest = "question.end" ;
 								# command
+								
 							}
 						}
 					}
@@ -269,7 +285,14 @@ sub Matrix_ParseHttpResponse($)
 	#	Matrix_PerformHttpRequest($hash, $nextRequest, '');
 	#} els
 	if ($nextRequest ne "" && ReadingsVal($name,'poll',0) == 1 && $data{MATRIX}{"$name"}{"FAILS"} < 3) {
-		Matrix_PerformHttpRequest($hash, $nextRequest, '');
+		if ($nextRequest eq "sync" && $data{MATRIX}{"$name"}{"repeat"}){
+			$def = $data{MATRIX}{"$name"}{"repeat"}->{"def"};
+			$value = $data{MATRIX}{"$name"}{"repeat"}->{"value"};
+			$data{MATRIX}{"$name"}{"repeat"} = undef;
+			Matrix_PerformHttpRequest($hash, $def, $value);
+		} else {
+			Matrix_PerformHttpRequest($hash, $nextRequest, '');
+		}
 	}
     # Damit ist die Abfrage zuende.
 }
@@ -286,7 +309,7 @@ sub Matrix_Initialize {
     $hash->{RenameFn}   = \&Matrix_Rename;
     $hash->{NotifyFn}   = \&Matrix_Notify;
 
-    $hash->{AttrList} = $AttrList;
+    $hash->{AttrList} = $AttrList." MatrixMessage";
 }
 
 sub Matrix_Define {
@@ -420,10 +443,10 @@ sub Matrix_Set {
 		return Matrix_PerformHttpRequest($hash, $opt, '');
 	}
 	elsif ($opt eq "question.start") {
-		return Matrix_PerformHttpRequest($hash, $opt, '');
+		return Matrix_PerformHttpRequest($hash, $opt, $value);
 	}
 	elsif ($opt eq "question.end") {
-		return Matrix_PerformHttpRequest($hash, $opt, '');
+		return Matrix_PerformHttpRequest($hash, $opt, $value);
 	}
 	elsif ($opt eq "register") {
 		return Matrix_PerformHttpRequest($hash, $opt, ''); # 2 steps (ToDo: 3 steps empty -> dummy -> registration_token o.a.)
@@ -435,7 +458,7 @@ sub Matrix_Set {
 		return Matrix_PerformHttpRequest($hash, $opt, '');
 	}
     else {		
-		return "Unknown argument $opt, choose one of filter:noArg question.start question.end:noArg poll:0,1 poll.fullstate:0,1 msg register login:noArg refresh:noArg";
+		return "Unknown argument $opt, choose one of filter:noArg question.start question.end poll:0,1 poll.fullstate:0,1 msg register login:noArg refresh:noArg";
 	}
     
 	#return "$opt set to $value. Try to get it.";
@@ -445,12 +468,11 @@ sub Matrix_Set {
 sub Matrix_Attr {
 	my ($cmd,$name,$attr_name,$attr_value) = @_;
 	if($cmd eq "set") {
-        if($attr_name eq "matrixRoom") {
-			if($attr_value !~ /^yes|no$/) {
-			    my $err = "Invalid argument $attr_value to $attr_name. Must be yes or no.";
-			    Log 3, "Matrix: ".$err;
-			    return $err;
-			}
+        if($attr_name eq "xxMatrixRoom") {
+			$attr_value =~ tr/: /~:/;
+			addToDevAttrList("mt", "MatrixMessage:".$attr_value);
+		} elsif($attr_name eq "xxMatrixMessage") {
+			@_[3] =~ tr/~/:/;
 		} else {
 		    return ;
 		}
@@ -504,9 +526,9 @@ sub Matrix_Attr {
               <li><i>poll.fullstate</i><br>
                   Defaults to "0": Set poll.fullstate to "1" for getting in the next sync a full state of all rooms</li>
               <li><i>question.start</i><br>
-                  Experimental: start a in this time fixed question in the room from reading room. The first answer to the question is logged and ends the question.</li>
+                  Start a question in the room from reading room. The first answer to the question is logged and ends the question.</li>
               <li><i>question.end</i><br>
-                  Experimental: stop a question also it is not answered.</li>
+                  Stop a question also it is not answered.</li>
         </ul>
     </ul>
     <br>
@@ -530,10 +552,10 @@ sub Matrix_Attr {
         Attributes:
         <ul>
             <li><i>MatrixMessage</i> <room-id><br>
-                Set the room-id to wich are messages sent.
+                Set the room-id to wich  messagesare sent.
             </li>
-            <li><i>MatrixQuestion_.</i> <room-id><br>
-                Set the room-id to wich are messages sent.
+            <li><i>MatrixQuestion_[0..9]</i> <room-id><br>
+                Prepared questions.
             </li>
             <li><i>MatrixRoom</i> <room-id 1> <room-id 2> ...<br>
                 Set the room-id's from wich are messages received.
@@ -612,17 +634,17 @@ sub Matrix_Attr {
         Attributes:
         <ul>
             <li><i>MatrixMessage</i> <room-id><br>
-                Set the room-id to wich are messages sent.
+                Setzt die Raum-ID in die alle Nachrichten gesendet werden. Zur Zeit ist nur ein Raum möglich.
             </li>
-            <li><i>MatrixQuestion_.</i> <room-id><br>
-                Set the room-id to wich are messages sent.
+            <li><i>MatrixQuestion_[0..9].</i> <room-id><br>
+                Vorbereitete Fragen, die mit set mt question.start 0..9 gestartet werden können.
             </li>
             <li><i>MatrixRoom</i> <room-id 1> <room-id 2> ...<br>
-                Set the room-id's from wich are messages received.
+                Alle Raum-ID's aus denen Nachrichten empfangen werden.
             </li>
             <li><i>MatrixSender</i> <code><user 1> <user 2> ...</code><br>
-                Set the user's from wich are messages received.<br><br>
-				Example: <code>attr matrix MatrixSender @name:matrix.server @second.name:matrix.server</code><br>
+                Alle Personen von denen Nachrichten empfangen werden.<br><br>
+				Beispiel: <code>attr matrix MatrixSender @name:matrix.server @second.name:matrix.server</code><br>
             </li>
         </ul>
     </ul>
