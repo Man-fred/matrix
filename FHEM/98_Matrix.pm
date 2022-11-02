@@ -23,7 +23,7 @@
 # Usage:
 #
 ##########################################################################
-# $Id: 98_Matrix.pm 24969 2022-10-31 09:44:00Z Man-fred $
+# $Id: 98_Matrix.pm 28158 2022-11-02 19:56:00Z Man-fred $
 
 package main;
 use strict;
@@ -31,7 +31,7 @@ use warnings;
 use HttpUtils;
 use vars qw(%data);
 
-my $Module_Version = '0.0.6';
+my $Module_Version = '0.0.7';
 
 my $AttrList = "MatrixRoom MatrixSender MatrixQuestion_0 MatrixQuestion_1 " . $readingFnAttributes;
 
@@ -51,6 +51,11 @@ sub Matrix_PerformHttpRequest($$$)
                 };
     $data{MATRIX}{"$name"}{"busy"} = $data{MATRIX}{"$name"}{"busy"} + 1;      # queue is busy until response is received
 	$data{MATRIX}{"$name"}{'LASTSEND'} = $now;                                # remember when last sent
+	if ($def eq "sync" && $data{MATRIX}{"$name"}{"next_refresh"} < $now){
+		$def = "refresh";
+		$data{MATRIX}{"$name"}{"next_refresh"} = $now + 300;
+	}
+	
 	my $device_id = ReadingsVal($name, 'device_id', undef) ? ', "device_id":"'.ReadingsVal($name, 'device_id', undef).'"' : "";
 	if ($def eq "register"){
       $param->{'url'} =  $hash->{server}."/_matrix/client/v3/register";
@@ -204,6 +209,7 @@ sub Matrix_ParseHttpResponse($)
 			$data{MATRIX}{"$name"}{"expires"} = $decoded->{'expires_in_ms'} if ($decoded->{'expires_in_ms'});
 			$data{MATRIX}{"$name"}{"refresh_token"} = $decoded->{'refresh_token'} if ($decoded->{'refresh_token'}); 
 			$data{MATRIX}{"$name"}{"access_token"} =  $decoded->{'access_token'} if ($decoded->{'access_token'});
+			$data{MATRIX}{"$name"}{"next_refresh"} = $now + $data{MATRIX}{"$name"}{"expires"}/1000 - 60; # refresh one minute before end
 		}
         if ($def eq "wellknown"){
 			# https://spec.matrix.org/unstable/client-server-api/
@@ -608,9 +614,11 @@ sub Matrix_Attr {
               <li><i>poll.fullstate</i><br>
                   Standard ist "0": Wenn poll.fullstate auf "1" gesetzt wird, werden beider nächsten Synchronisation alle Raumeigenschaften neu eingelesen.</li>
               <li><i>question.start</i><br>
-                  Experimentell: zur Zeit noch feste Frage in den Raum des Attributs "MatrixMessage". Die erste Antwort steht im Reading "answer" und die Frage wird beendet.</li>
+                  Frage in dem Raum des Attributs "MatrixMessage" stellen. Die erste Antwort steht im Reading "answer" und beendet die Frage.<br>
+				  Als Wert wird entweder die Nummer einer vorbereiteten Frage übergeben oder eine komplette Frage in der Form<br>
+				  <code>Frage:Antwort 1:Antwort 2:....:Antwort n</code></li>
               <li><i>question.end</i><br>
-                  Experimentell: Die gestartete Frage ohne Antwort beenden.</li>
+                  Die gestartete Frage ohne Antwort beenden. Entweder wird ohne Parameter die aktuelle Frage beendet oder mit einer Nachrichten-ID eine "verwaiste" Frage.</li>
         </ul>
     </ul>
     <br>
@@ -637,13 +645,14 @@ sub Matrix_Attr {
                 Setzt die Raum-ID in die alle Nachrichten gesendet werden. Zur Zeit ist nur ein Raum möglich.
             </li>
             <li><i>MatrixQuestion_[0..9].</i> <room-id><br>
-                Vorbereitete Fragen, die mit set mt question.start 0..9 gestartet werden können.
+                Vorbereitete Fragen, die mit set mt question.start 0..9 gestartet werden können.<br>
+				Format der Fragen: <code>Frage:Antwort 1:Antwort 2:....:Antwort n</code>
             </li>
             <li><i>MatrixRoom</i> <room-id 1> <room-id 2> ...<br>
                 Alle Raum-ID's aus denen Nachrichten empfangen werden.
             </li>
             <li><i>MatrixSender</i> <code><user 1> <user 2> ...</code><br>
-                Alle Personen von denen Nachrichten empfangen werden.<br><br>
+                Alle Personen von denen Nachrichten empfangen werden.<br>
 				Beispiel: <code>attr matrix MatrixSender @name:matrix.server @second.name:matrix.server</code><br>
             </li>
         </ul>
