@@ -23,13 +23,16 @@
 # Usage:
 #
 ##########################################################################
-# $Id: 98_Matrix.pm 28158 2022-11-02 19:56:00Z Man-fred $
+# $Id: 98_Matrix.pm 29553 2022-11-03 22:43:00Z Man-fred $
 
 package main;
 use strict;
 use warnings;
 use HttpUtils;
+use JSON;
 use vars qw(%data);
+use FHEM::Core::Authentication::Passwords qw(:ALL);
+#use FHEM::Core::Authentication::Passwords qw(&setStorePassword);
 
 my $Module_Version = '0.0.7';
 
@@ -40,6 +43,7 @@ sub Matrix_PerformHttpRequest($$$)
     my ($hash, $def, $value) = @_;
 	my $now  = gettimeofday();
     my $name = $hash->{NAME};
+	my $passwd = $hash->{helper}->{passwdobj}->getReadPassword($name);
     my $param = {
                     timeout    => 10,
                     hash       => $hash,                                      # Muss gesetzt werden, damit die Callback funktion wieder $hash hat
@@ -59,15 +63,15 @@ sub Matrix_PerformHttpRequest($$$)
 	my $device_id = ReadingsVal($name, 'device_id', undef) ? ', "device_id":"'.ReadingsVal($name, 'device_id', undef).'"' : "";
 	if ($def eq "register"){
       $param->{'url'} =  $hash->{server}."/_matrix/client/v3/register";
-      $param->{'data'} = '{"type":"m.login.password", "identifier":{ "type":"m.id.user", "user":"'.$hash->{user}.'" }, "password":"'.$hash->{password}.'"}';
+      $param->{'data'} = '{"type":"m.login.password", "identifier":{ "type":"m.id.user", "user":"'.$hash->{user}.'" }, "password":"'.$passwd.'"}';
 	}
 	if ($def eq"reg2"){
       $param->{'url'} =  $hash->{server}."/_matrix/client/v3/register";
-      $param->{'data'} = '{"username":"'.$hash->{user}.'", "password":"'.$hash->{password}.'", "auth": {"session":"'.$data{MATRIX}{"$name"}{"session"}.'","type":"m.login.dummy"}}';
+      $param->{'data'} = '{"username":"'.$hash->{user}.'", "password":"'.$passwd.'", "auth": {"session":"'.$data{MATRIX}{"$name"}{"session"}.'","type":"m.login.dummy"}}';
 	}
 	if ($def eq "login"){
       $param->{'url'} =  $hash->{server}."/_matrix/client/v3/login";
-      $param->{'data'} = '{"type":"m.login.password", "refresh_token": true, "identifier":{ "type":"m.id.user", "user":"'.$hash->{user}.'" }, "password":"'.$hash->{password}.'"'
+      $param->{'data'} = '{"type":"m.login.password", "refresh_token": true, "identifier":{ "type":"m.id.user", "user":"'.$hash->{user}.'" }, "password":"'.$passwd.'"'
 	                     .$device_id.'}';
 	}
 	if ($def eq "refresh"){              
@@ -85,7 +89,7 @@ sub Matrix_PerformHttpRequest($$$)
       $value = AttrVal($name, "MatrixQuestion_$value",$value); #  if ($value =~ /[0-9]/);
 	  my @question = split(':',$value);
 	  my $size = @question;
-	  $value =~ tr/:/<br>/;
+	  $value =~ s/:/<br>/g;
 	  # min. question and one answer
 	  if (int(@question) >= 2){
 		  $param->{'url'} =  $hash->{server}.'/_matrix/client/v3/rooms/'.AttrVal($name, 'MatrixMessage', '!!').'/send/m.poll.start?access_token='.$data{MATRIX}{"$name"}{"access_token"};
@@ -166,7 +170,7 @@ sub Matrix_ParseHttpResponse($)
     }
     elsif($data ne "") {                                                     # wenn die Abfrage erfolgreich war ($data enthält die Ergebnisdaten des HTTP Aufrufes)
 		Log3 $name, 3, $def." returned: $data";              # Eintrag fürs Log
-		my $decoded = eval { decode_json($data) };
+		my $decoded = eval { JSON::decode_json($data) };
 		Log3 $name, 2, "$name: json error: $@ in data" if( $@ );
         if ($param->{code} == 200){
 			$data{MATRIX}{"$name"}{"FAILS"} = 0;
@@ -322,14 +326,15 @@ sub Matrix_Define {
     my ($hash, $def) = @_;
     my @param = split('[ \t]+', $def);
     
-    if(int(@param) < 4) {
-        return "too few parameters: define <name> Matrix <server> <user> <password>";
+    if(int(@param) < 3) {
+        return "too few parameters: define <name> Matrix <server> <user>";
     }
     
     $hash->{name}  = $param[0];
     $hash->{server} = $param[2];
     $hash->{user} = $param[3];
     $hash->{password} = $param[4];
+    $hash->{helper}->{passwdobj} = FHEM::Core::Authentication::Passwords->new($hash->{TYPE});
 	
 	my $name = $param[0];
     #$data{MATRIX}{"$name"}{"FAILS"} = 0;
@@ -356,7 +361,7 @@ sub Matrix_Undef {
 sub Matrix_Startproc {
 	my ($hash) = @_;
 	my $name = $hash->{NAME};
-    Log3 $name, 1, "$name: Matrix_Startproc V".$hash->{ModuleVersion}." -> V".$Module_Version; 
+    Log3 $name, 1, "$name: Matrix_Startproc V".$hash->{ModuleVersion}." -> V".$Module_Version if ($hash->{ModuleVersion}); 
 	# Update necessary?
 	$hash->{ModuleVersion} = $Module_Version;   
 }
@@ -445,6 +450,12 @@ sub Matrix_Set {
 	elsif ($opt eq "poll" || $opt eq "poll.fullstate") {
 		readingsSingleUpdate($hash, $opt, $value, 1);                                                        # Readings erzeugen
 	}
+	elsif ($opt eq "password") {
+		# Can't call method "setStorePassword" on an undefined value at ./FHEM/98_Matrix.pm line 451.
+		my ($erg,$err) = $hash->{helper}->{passwdobj}->setStorePassword($name,$value);
+		Log3 $name, 1, "$name : Matrix_Set $opt - $value -";
+		return undef;
+	}
 	elsif ($opt eq "filter") {
 		return Matrix_PerformHttpRequest($hash, $opt, '');
 	}
@@ -464,7 +475,7 @@ sub Matrix_Set {
 		return Matrix_PerformHttpRequest($hash, $opt, '');
 	}
     else {		
-		return "Unknown argument $opt, choose one of filter:noArg question.start question.end poll:0,1 poll.fullstate:0,1 msg register login:noArg refresh:noArg";
+		return "Unknown argument $opt, choose one of filter:noArg password question.start question.end poll:0,1 poll.fullstate:0,1 msg register login:noArg refresh:noArg";
 	}
     
 	#return "$opt set to $value. Try to get it.";
@@ -478,7 +489,7 @@ sub Matrix_Attr {
 			$attr_value =~ tr/: /~:/;
 			addToDevAttrList("mt", "MatrixMessage:".$attr_value);
 		} elsif($attr_name eq "xxMatrixMessage") {
-			@_[3] =~ tr/~/:/;
+			$_[3] =~ tr/~/:/;
 		} else {
 		    return ;
 		}
@@ -500,9 +511,9 @@ sub Matrix_Attr {
     <a name="Matrixdefine"></a>
     <b>Define</b>
     <ul>
-        <code>define &lt;name&gt; <server> <user> <password></code>
+        <code>define &lt;name&gt; <server> <user></code>
         <br><br>
-        Example: <code>define matrix Matrix matrix.com fhem asdf</code>
+        Example: <code>define matrix Matrix matrix.com fhem</code>
         <br><br>
         noch ins Englische: 
 		1. Anmerkung: Zur einfachen Einrichtung habe ich einen Matrix-Element-Client mit "--profile=fhem" gestartet und dort die Registrierung und die Räume vorbereitet. Achtung: alle Räume müssen noch unverschlüsselt sein um FHEM anzubinden. Alle Einladungen in Räume und Annehmen von Einladungen geht hier viel einfacher. Aus dem Element-Client dann die Raum-IDs merken für das Modul.<br/>
@@ -519,6 +530,8 @@ sub Matrix_Attr {
         <br><br>
         Options:
         <ul>
+              <li><i>password</i><br>
+                  Set the password to login</li>
               <li><i>register</i><br>
                   without function, do not use this</li>
               <li><i>login</i><br>
@@ -583,9 +596,9 @@ sub Matrix_Attr {
     <a name="Matrixdefine"></a>
     <b>Define</b>
     <ul>
-        <code>define &lt;name&gt; <server> <user> <passwort></code>
+        <code>define &lt;name&gt; <server> <user></code>
         <br><br>
-        Beispiel: <code>define matrix Matrix matrix.com fhem asdf</code>
+        Beispiel: <code>define matrix Matrix matrix.com fhem</code>
         <br><br>
         1. Anmerkung: Zur einfachen Einrichtung habe ich einen Matrix-Element-Client mit "--profile=fhem" gestartet und dort die Registrierung und die Räume vorbereitet. Achtung: alle Räume müssen noch unverschlüsselt sein um FHEM anzubinden. Alle Einladungen in Räume und Annehmen von Einladungen geht hier viel einfacher. Aus dem Element-Client dann die Raum-IDs merken für das Modul.<br/>
 		2. Anmerkung: sets, gets, Attribute und Readings müssen noch besser bezeichnet werden.
@@ -601,6 +614,8 @@ sub Matrix_Attr {
         <br><br>
         Options:
         <ul>
+              <li><i>password</i><br>
+                  Setzt das Passwort zum Login</li>
               <li><i>register</i><br>
                   noch ohne Funktion!</li>
               <li><i>login</i><br>
