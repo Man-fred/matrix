@@ -1,0 +1,39 @@
+parseParams#!/usr/bin/perl -w
+
+use File::Basename;
+use POSIX qw(strftime);
+use strict;
+
+my @filenames = ( 'FHEM/98_Matrix.pm',
+                  'lib/FHEM/Devices/Matrix.pm'   
+                );
+
+my $controlsfile = 'controls_Matrix.txt';
+
+open(FH, ">$controlsfile") || return("Can't open $controlsfile: $!");
+
+for my  $filename (@filenames) {
+    my @statOutput = stat($filename);
+
+    if (scalar @statOutput != 13) {
+        printf 'error: stat has unexpected return value for ' . $filename . "\n";
+        next;
+    }
+
+    my $mtime = $statOutput[9];
+    my $date = POSIX::strftime("%Y-%m-%d", localtime($mtime));
+    my $time = POSIX::strftime("%H:%M:%S", localtime($mtime));
+    my $filetime = $date."_".$time;
+
+    my $filesize = $statOutput[7];
+
+    printf FH 'UPD ' . $filetime . ' ' . $filesize . ' ' .$filename . "\n";
+}
+
+close(FH);
+
+system("git add $controlsfile");
+
+print 'Create controls File succesfully' . "\n";
+
+exit 0;
