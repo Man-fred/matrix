@@ -2,7 +2,7 @@
 # Usage:
 #
 ##########################################################################
-# $Id: Matrix.pm 20020 2022-11-05 12:26:00Z Man-fred $
+# $Id: Matrix.pm 21301 2022-11-06 12:52:00Z Man-fred $
 
 package FHEM::Devices::Matrix;
 use strict;
@@ -37,27 +37,33 @@ BEGIN {
     HttpUtils_NonblockingGet
 	data
 	gettimeofday
+	fhem
   ))
 };
 
 my $Module_Version = '0.0.7';
+my $language = 'EN';
+
+sub Attr_List{
+	return "MatrixRoom MatrixSender MatrixMessage MatrixQuestion_ MatrixQuestion_[0-9]+ MatrixAnswer_ MatrixAnswer_[0-9]+ $readingFnAttributes";
+}
 
 sub Define {
-    my ($hash, $param) = @_;
-    # my @param = split('[ \t]+', $def);
-	my $name = $param->[0]; #$param[0];
+    my ($hash, $def) = @_;
+    my @param = split('[ \t]+', $def);
+	my $name = $param[0]; #$param[0];
 	
-    Log3($name, 1, "$name: Define: $param->[2] ".int(@$param)); 
+    Log3($name, 1, "$name: Define: $param[2] ".int(@param)); 
 
-    if(int(@$param) < 1) {
+    if(int(@param) < 1) {
         return "too few parameters: define <name> Matrix <server> <user>";
     }
-    $hash->{name}  = $param->[0];
-    $hash->{server} = $param->[2];
-    $hash->{user} = $param->[3];
-    $hash->{password} = $param->[4];
+    $hash->{name}  = $param[0];
+    $hash->{server} = $param[2];
+    $hash->{user} = $param[3];
+    $hash->{password} = $param[4];
     $hash->{helper}->{passwdobj} = FHEM::Core::Authentication::Passwords->new($hash->{TYPE});
-	
+	#$hash->{helper}->{i18} = Get_I18n();
 	$hash->{NOTIFYDEV} = "global";
 	Startproc($hash) if($init_done);
     return ;
@@ -78,6 +84,7 @@ sub Startproc {
     Log3($name, 1, "$name: Startproc V".$hash->{ModuleVersion}." -> V".$Module_Version) if ($hash->{ModuleVersion}); 
 	# Update necessary?
 	$hash->{ModuleVersion} = $Module_Version;   
+	$language = AttrVal('global','language','EN');
 }
 
 ##########################
@@ -87,20 +94,21 @@ sub Notify($$)
 	my $name = $hash->{NAME};
 	my $devName = $dev->{NAME};
 	return "" if(IsDisabled($name));
-	Log3($name, 1, "$name : X_Notify $devName");
+	#Log3($name, 1, "$name : X_Notify $devName");
 	my $events = deviceEvents($dev,1);
 	return if( !$events );
 
-	if($devName eq "global" && grep(m/^INITIALIZED|REREADCFG$/, @{$events}))
+	if(($devName eq "global") && grep(m/^INITIALIZED|REREADCFG$/, @{$events}))
 	{
 		Startproc($hash);
 	}
-
 	foreach my $event (@{$events}) {
 		$event = "" if(!defined($event));
 		### Writing log entry
 		Log3($name, 4, "$name : X_Notify $devName - $event");
+		$language = AttrVal('global','language','EN') if ($event =~ /ATTR global language.*/);
 		# Examples:
+		# $event = "ATTR global language DE"
 		# $event = "readingname: value" 
 		# or
 		# $event = "INITIALIZED" (for $devName equal "global")
@@ -124,13 +132,30 @@ sub Rename($$) {
     #my $nhash = $defs{$new};
 }
 
+sub I18N {
+	my $value = shift;
+	my $def = { 
+		'EN' => {
+			'require2' => 'requires 2 arguments'
+		},
+		'DE' => {
+			'require2' => 'benötigt 2 Argumente'
+		}, 
+	};
+    my $result = $def->{$language}->{$value};
+	return ($result ? $result : $value);
+	
+}
+
 sub Get {
     my $hash = shift;
-    my $aArg = shift;
+    my $def = shift;
+    my @param = split('[ \t]+', $def);
 
-    my $name = shift @$aArg;
-    my $cmd  = shift @$aArg;
-	my $value = shift @$aArg;
+    my $name = shift @param;
+    my $cmd  = shift @param;
+	my $value = join(" ", @param);
+	$cmd = '?' if (!$cmd);
 
 	if ($cmd eq "wellknown") {
 		return PerformHttpRequest($hash, $cmd, '');
@@ -148,14 +173,16 @@ sub Get {
 
 sub Set {
 	my $hash = shift;
-    my $param = shift;
+    my $def = shift;
     my $hArg = shift;
+    my @param = split('[ \t]+', $def);
 
-    my $name = shift @$param;
-    my $opt  = shift @$param;
-	my $value = join("", @$param);
+    my $name = shift @param;
+    my $opt  = shift @param;
+	my $value = join(" ", @param);
+	$opt = '?' if (!$opt);
 	
-	#Log3($name, 5, "Set $name - $opt - $value - $hash->{NAME}");
+	#Log3($name, 5, "Set $hash->{NAME}: $name - $opt - $value -- $def");
 	#return "set $name needs at least one argument" if (int(@$param) < 3);
 	
 	if ($opt eq "msg") {
@@ -196,14 +223,20 @@ sub Set {
 
 sub Attr {
 	my ($cmd,$name,$attr_name,$attr_value) = @_;
+	Log3($name, 1, "Attr - $cmd - $name - $attr_name - $attr_value");
 	if($cmd eq "set") {
-        if($attr_name eq "xxMatrixRoom") {
-			$attr_value =~ tr/: /~:/;
-			addToDevAttrList("mt", "MatrixMessage:".$attr_value);
-		} elsif($attr_name eq "xxMatrixMessage") {
-			$_[3] =~ tr/~/:/;
-		} else {
-		    return ;
+		if ($attr_name eq "MatrixQuestion_") {
+			my @erg = split(/ /, $attr_value, 2);
+			#$_[2] = "MatrixQuestion_n";
+			return qq("attr $name $attr_name" ).I18N('require2') if (!$erg[1] || $erg[0] !~ /[0-9]/);
+			$_[2] = "MatrixQuestion_$erg[0]";
+			$_[3] = $erg[1];
+		}
+		if ($attr_name eq "MatrixAnswer_") {
+			my @erg = split(/ /, $attr_value, 2);
+			return qq(wrong arguments $attr_name") if (!$erg[1] || $erg[0] !~ /[0-9]+/);
+			$_[2] = "MatrixAnswer_$erg[0]";
+			$_[3] = $erg[1];
 		}
 	}
 	return ;
@@ -418,11 +451,12 @@ sub ParseHttpResponse($)
 						readingsBulkUpdate($hash, "room$pos.name", $tl->{'content'}->{'name'}) if ($tl->{'type'} eq 'm.room.name'); 
 						if ($tl->{'type'} eq 'm.room.message' && $tl->{'content'}->{'msgtype'} eq 'm.text'){
 							my $sender = $tl->{'sender'};
+							my $message = $tl->{'content'}->{'body'};
 							if (AttrVal($name, 'MatrixSender', '') =~ $sender){
-								readingsBulkUpdate($hash, "message", $tl->{'content'}->{'body'}); 
+								readingsBulkUpdate($hash, "message", $message); 
 								readingsBulkUpdate($hash, "sender", $sender); 
 								# command
-								
+								fhem($message) if ($message =~ /set .*/i);
 							}
 							#else {
 							#	readingsBulkUpdate($hash, "message", 'ignoriert, nicht '.AttrVal($name, 'MatrixSender', '')); 
@@ -430,13 +464,14 @@ sub ParseHttpResponse($)
 							#}
 						} elsif ($tl->{'type'} eq "org.matrix.msc3381.poll.response"){
 							my $sender = $tl->{'sender'};
+							my $message = $tl->{'content'}->{'org.matrix.msc3381.poll.response'}->{'answers'}[0];
 							if (AttrVal($name, 'MatrixSender', '') =~ $sender){
-								readingsBulkUpdate($hash, "answer", $tl->{'content'}->{'org.matrix.msc3381.poll.response'}->{'answers'}[0]); 
+								readingsBulkUpdate($hash, "answer", $message); 
 								readingsBulkUpdate($hash, "sender", $sender); 
 								# poll.end and 
 								$nextRequest = "question.end" ;
 								# command
-								
+								fhem($message) if ($message =~ /set .*/i);
 							}
 						}
 					}

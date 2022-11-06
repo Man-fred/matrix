@@ -23,7 +23,7 @@
 # Usage:
 #
 ##########################################################################
-# $Id: 98_Matrix.pm 11656 2022-11-05 12:26:00Z Man-fred $
+# $Id: 98_Matrix.pm 13172 2022-11-06 12:52:00Z Man-fred $
 
 package FHEM::Devices::Matrix;
 use strict;
@@ -35,12 +35,11 @@ use GPUtils qw(GP_Export GP_Import);
 use JSON;
 use vars qw(%data);
 use FHEM::Core::Authentication::Passwords qw(:ALL);
-#use FHEM::Core::Authentication::Passwords qw(&setStorePassword);
 require FHEM::Devices::Matrix::Matrix;
 
 #-- Run before package compilation
 BEGIN {
-          
+
     #-- Export to main context with different name
     GP_Export(qw(
         Initialize
@@ -62,11 +61,12 @@ sub Initialize {
     $hash->{RenameFn}   = \&FHEM::Devices::Matrix::Rename;
     $hash->{NotifyFn}   = \&FHEM::Devices::Matrix::Notify;
 
-    $hash->{AttrList} = "MatrixRoom MatrixSender MatrixMessage MatrixQuestion_0 MatrixQuestion_1 " . $readingFnAttributes;
-    $hash->{parseParams}    = 1;
+    #$hash->{AttrList}   = $FHEM::Devices::Matrix::attr_list;
+    $hash->{AttrList}   = Attr_List();
+    #$hash->{parseParams}    = 1;
     return FHEM::Meta::InitMod( __FILE__, $hash );
-	}
-	
+}
+
 
 1;
 
@@ -151,19 +151,31 @@ sub Initialize {
         Attributes:
         <ul>
 			<a id="Matrix-attr-MatrixMessage"></a>
-            <li><i>MatrixMessage</i> <room-id><br>
+            <li><i>MatrixMessage</i> &lt;room-id&gt;<br>
                 Set the room-id to wich  messagesare sent.
             </li>
-			<a id="Matrix-attr-MatrixQuestion_[0..9]"></a>
-            <li><i>MatrixQuestion_[0..9]</i> <room-id><br>
+			<a id="Matrix-attr-MatrixQuestion_"></a>
+            <li><i>MatrixQuestion_[0..9]+</i> &lt;question&gt;:&lt;answer 1&gt;:&lt;answer 2&gt;:...&lt;answer max. 20&gt;<br>
                 Prepared questions.
             </li>
+			<a id="Matrix-attr-MatrixQuestion__0-9__"></a>
+            <li><i>MatrixQuestion_[0..9]+</i> &lt;question&gt;:&lt;answer 1&gt;:&lt;answer 2&gt;:...&lt;answer max. 20&gt;<br>
+                Prepared questions.
+            </li>
+			<a id="Matrix-attr-MatrixAnswer_"></a>
+            <li><i>MatrixAnswer_[0..9]</i><br>
+                Prepared commands.
+            </li>
+			<a id="Matrix-attr-MatrixAnswer__0-9__"></a>
+            <li><i>MatrixAnswer_[0..9]</i><br>
+                Prepared commands.
+            </li>
 			<a id="Matrix-attr-MatrixRoom"></a>
-            <li><i>MatrixRoom</i> <room-id 1> <room-id 2> ...<br>
+            <li><i>MatrixRoom</i> &lt;room-id 1&gt; &lt;room-id 2&gt; ...<br>
                 Set the room-id's from wich are messages received.
             </li>
 			<a id="Matrix-attr-MatrixSender"></a>
-            <li><i>MatrixSender</i> <code><user 1> <user 2> ...</code><br>
+            <li><i>MatrixSender</i> <code>&lt;user 1&gt; &lt;user 2&gt; ...</code><br>
                 Set the user's from wich are messages received.<br><br>
 				Example: <code>attr matrix MatrixSender @name:matrix.server @second.name:matrix.server</code><br>
             </li>
@@ -182,7 +194,7 @@ sub Initialize {
     <a id="Matrix-define"></a>
     <h4>Define</h4>
     <ul>
-        <code>define &lt;name&gt; <server> <user></code>
+        <code>define &lt;name&gt; &lt;server&gt; &lt;user&gt;</code>
         <br><br>
         Beispiel: <code>define matrix Matrix matrix.com fhem</code>
         <br><br>
@@ -252,20 +264,35 @@ sub Initialize {
         Attributes:
         <ul>
 			<a id="Matrix-attr-MatrixMessage"></a>
-            <li><i>MatrixMessage</i> <room-id><br>
+            <li><i>MatrixMessage</i> &lt;room-id&gt;<br>
                 Setzt die Raum-ID in die alle Nachrichten gesendet werden. Zur Zeit ist nur ein Raum möglich.
             </li>
-			<a id="Matrix-attr-MatrixQuestion_[0..9]"></a>
-            <li><i>MatrixQuestion_[0..9]</i> <room-id><br>
-                Vorbereitete Fragen, die mit set mt question.start 0..9 gestartet werden können.<br>
+			<a id="Matrix-attr-MatrixAnswer_"></a>
+            <li><i>MatrixAnswer_</i><br>
+                Antworten = Befehle ausführen ist noch nicht freigegeben</code>
+            </li>
+			<a id="Matrix-attr-MatrixAnswer__0-9__"></a>
+            <li><i>MatrixAnswer_[0-9]+</i><br>
+                Antworten = Befehle ausführen ist noch nicht freigegeben</code>
+            </li>
+			<a id="Matrix-attr-MatrixQuestion_"></a>
+            <li><i>MatrixQuestion_</i> <br>
+                Vorbereitete Fragen, die mit set mt question.start 0..9 gestartet werden können. Es sind maximal 20 Antworten möglich.<br>
 				Format der Fragen: <code>Frage:Antwort 1:Antwort 2:....:Antwort n</code>
+				Eingabe in der Attribut-Liste: <code>[0-9]+ Frage:Antwort 1:Antwort 2:....:Antwort n</code>
+            </li>
+			<a id="Matrix-attr-MatrixQuestion__0-9__"></a>
+            <li><i>MatrixQuestion_[0-9]+</i><br>
+                Vorbereitete Fragen, die mit set mt question.start 0..9 gestartet werden können. Es sind maximal 20 Antworten möglich.<br>
+				Format der Fragen: <code>Frage:Antwort 1:Antwort 2:....:Antwort n</code>
+				Eingabe in der Attribut-Liste: <code>[0-9]+ Frage:Antwort 1:Antwort 2:....:Antwort n</code>
             </li>
 			<a id="Matrix-attr-MatrixRoom"></a>
-            <li><i>MatrixRoom</i> <room-id 1> <room-id 2> ...<br>
+            <li><i>MatrixRoom</i> &lt;room-id 1&gt; &lt;room-id 2&gt; ...<br>
                 Alle Raum-ID's aus denen Nachrichten empfangen werden.
             </li>
 			<a id="Matrix-attr-MatrixSender"></a>
-            <li><i>MatrixSender</i> <code><user 1> <user 2> ...</code><br>
+            <li><i>MatrixSender</i> <code>&lt;user 1&gt; &lt;user 2&gt; ...</code><br>
                 Alle Personen von denen Nachrichten empfangen werden.<br>
 				Beispiel: <code>attr matrix MatrixSender @name:matrix.server @second.name:matrix.server</code><br>
             </li>
