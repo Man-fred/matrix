@@ -148,14 +148,9 @@ sub I18N {
 }
 
 sub Get {
-    my $hash = shift;
-    my $def = shift;
-    my @param = split('[ \t]+', $def);
-
-    my $name = shift @param;
-    my $cmd  = shift @param;
-	my $value = join(" ", @param);
-	$cmd = '?' if (!$cmd);
+	my ( $hash, $name, $cmd, @args ) = @_;
+	my $value = join(" ", @args);
+	#$cmd = '?' if (!$cmd);
 
 	if ($cmd eq "wellknown") {
 		return PerformHttpRequest($hash, $cmd, '');
@@ -172,49 +167,43 @@ sub Get {
 }
 
 sub Set {
-	my $hash = shift;
-    my $def = shift;
-    my $hArg = shift;
-    my @param = split('[ \t]+', $def);
-
-    my $name = shift @param;
-    my $opt  = shift @param;
-	my $value = join(" ", @param);
-	$opt = '?' if (!$opt);
+	my ( $hash, $name, $cmd, @args ) = @_;
+	my $value = join(" ", @args);
+	#$opt = '?' if (!$opt);
 	
-	#Log3($name, 5, "Set $hash->{NAME}: $name - $opt - $value -- $def");
+	#Log3($name, 5, "Set $hash->{NAME}: $name - $cmd - $value");
 	#return "set $name needs at least one argument" if (int(@$param) < 3);
 	
-	if ($opt eq "msg") {
-		return PerformHttpRequest($hash, $opt, $value);
+	if ($cmd eq "msg") {
+		return PerformHttpRequest($hash, $cmd, $value);
 	}
-	elsif ($opt eq "poll" || $opt eq "poll.fullstate") {
-		readingsSingleUpdate($hash, $opt, $value, 1);                                                        # Readings erzeugen
+	elsif ($cmd eq "poll" || $cmd eq "poll.fullstate") {
+		readingsSingleUpdate($hash, $cmd, $value, 1);                                                        # Readings erzeugen
 	}
-	elsif ($opt eq "password") {
+	elsif ($cmd eq "password") {
 		my ($erg,$err) = $hash->{helper}->{passwdobj}->setStorePassword($name,$value);
 		return undef;
 	}
-	elsif ($opt eq "filter") {
-		return PerformHttpRequest($hash, $opt, '');
+	elsif ($cmd eq "filter") {
+		return PerformHttpRequest($hash, $cmd, '');
 	}
-	elsif ($opt eq "question") {
-		return PerformHttpRequest($hash, $opt, $value);
+	elsif ($cmd eq "question") {
+		return PerformHttpRequest($hash, $cmd, $value);
 	}
-	elsif ($opt eq "question.end") {
-		return PerformHttpRequest($hash, $opt, $value);
+	elsif ($cmd eq "question.end") {
+		return PerformHttpRequest($hash, $cmd, $value);
 	}
-	elsif ($opt eq "register") {
-		return PerformHttpRequest($hash, $opt, ''); # 2 steps (ToDo: 3 steps empty -> dummy -> registration_token o.a.)
+	elsif ($cmd eq "register") {
+		return PerformHttpRequest($hash, $cmd, ''); # 2 steps (ToDo: 3 steps empty -> dummy -> registration_token o.a.)
 	}
-	elsif ($opt eq "login") {
-		return PerformHttpRequest($hash, $opt, '');
+	elsif ($cmd eq "login") {
+		return PerformHttpRequest($hash, $cmd, '');
 	}
-	elsif ($opt eq "refresh") {
-		return PerformHttpRequest($hash, $opt, '');
+	elsif ($cmd eq "refresh") {
+		return PerformHttpRequest($hash, $cmd, '');
 	}
     else {		
-		return "Unknown argument $opt, choose one of filter:noArg password question question.end poll:0,1 poll.fullstate:0,1 msg register login:noArg refresh:noArg";
+		return "Unknown argument $cmd, choose one of filter:noArg password question question.end poll:0,1 poll.fullstate:0,1 msg register login:noArg refresh:noArg";
 	}
     
 	#return "$opt set to $value. Try to get it.";
@@ -240,6 +229,28 @@ sub Attr {
 		}
 	}
 	return ;
+}
+
+sub Get_Message($$$) {
+	my($name, $def, $message) = @_;
+	Log3($name, 5, "$name - $def - $message");
+	my $q = AttrVal($name, "MatrixQuestion_$def", "");
+	my $a = AttrVal($name, "MatrixAnswer_$def", "");
+	my @questions = split(':',$q);
+	shift @questions;
+	my @answers = split(':', $a);
+	Log3($name, 5, "$name - $q - $a");
+	my $pos = 0;
+	my ($question, $answer);
+	foreach $question (@questions){
+		$answer = $answers[$pos] if ($message eq $question);
+		if ($answer){
+			Log3($name, 5, "$name - $pos - $answer");
+			fhem($answer);
+			last;
+		}
+		$pos++;
+	}
 }
 
 sub PerformHttpRequest($$$)
@@ -273,6 +284,10 @@ sub PerformHttpRequest($$$)
       $param->{'url'} =  $hash->{server}."/_matrix/client/v3/register";
       $param->{'data'} = '{"type":"m.login.password", "identifier":{ "type":"m.id.user", "user":"'.$hash->{user}.'" }, "password":"'.$passwd.'"}';
 	}
+	if ($def eq "reg1"){
+      $param->{'url'} =  $hash->{server}."/_matrix/client/v3/register";
+      $param->{'data'} = '{"type":"m.login.password", "identifier":{ "type":"m.id.user", "user":"'.$hash->{user}.'" }, "password":"'.$passwd.'"}';
+	}
 	if ($def eq"reg2"){
       $param->{'url'} =  $hash->{server}."/_matrix/client/v3/register";
       $param->{'data'} = '{"username":"'.$hash->{user}.'", "password":"'.$passwd.'", "auth": {"session":"'.$data{MATRIX}{"$name"}{"session"}.'","type":"m.login.dummy"}}';
@@ -294,18 +309,26 @@ sub PerformHttpRequest($$$)
       $param->{'data'} = '{"msgtype":"m.text", "body":"'.$value.'"}';
 	}
 	if ($def eq "question"){ 
-      $value = AttrVal($name, "MatrixQuestion_$value",$value); #  if ($value =~ /[0-9]/);
+	  $data{MATRIX}{"$name"}{"question"}=$value;
+      $value = AttrVal($name, "MatrixQuestion_$value",""); #  if ($value =~ /[0-9]/);
 	  my @question = split(':',$value);
 	  my $size = @question;
+	  my $answer;
+	  my $q = shift @question;
 	  $value =~ s/:/<br>/g;
 	  # min. question and one answer
 	  if (int(@question) >= 2){
-		  $param->{'url'} =  $hash->{server}.'/_matrix/client/v3/rooms/'.AttrVal($name, 'MatrixMessage', '!!').'/send/m.poll.start?access_token='.$data{MATRIX}{"$name"}{"access_token"};
+		  $param->{'url'} =  $hash->{server}.'/_matrix/client/v3/rooms/'.AttrVal($name, 'MatrixMessage', '!!').
+			'/send/m.poll.start?access_token='.$data{MATRIX}{"$name"}{"access_token"};
 		  $param->{'data'} = '{"org.matrix.msc3381.poll.start": {"max_selections": 1,'.
-		  '"question": {"org.matrix.msc1767.text": "'.$question[0].'"},'.
-		  '"kind": "org.matrix.msc3381.poll.undisclosed",'.
-		  '"answers": [{"id": "'.$question[1].'", "org.matrix.msc1767.text": "'.$question[1].'"},{"id":"'.$question[2].'","org.matrix.msc1767.text": "'.$question[2].'"}],'.
-		  '"org.matrix.msc1767.text": "'.$value.'"}}';
+		  '"question": {"org.matrix.msc1767.text": "'.$q.'"},'.
+		  '"kind": "org.matrix.msc3381.poll.undisclosed","answers": [';
+		  my $comma = '';
+		  foreach $answer (@question){
+			  $param->{'data'} .= qq($comma {"id": "$answer", "org.matrix.msc1767.text": "$answer"});
+			  $comma = ',';
+		  }
+		  $param->{'data'} .= qq(],"org.matrix.msc1767.text": "$value"}});
 	  } else {
 		  Log3($name, 5, "question: $value $size $question[0]");
 		  return;
@@ -408,7 +431,7 @@ sub ParseHttpResponse($)
         
         if ($def eq "register"){
 			$data{MATRIX}{"$name"}{"session"} = $decoded->{'session'};
-			$nextRequest = "reg2";
+			$nextRequest = "";#"reg2";
 		}
         if ($param->{code} == 200 && ($def eq  "reg2" || $def eq  "login" || $def eq "refresh")){
 			readingsBulkUpdate($hash, "user_id", $decoded->{'user_id'}) if ($decoded->{'user_id'});
@@ -456,7 +479,7 @@ sub ParseHttpResponse($)
 								readingsBulkUpdate($hash, "message", $message); 
 								readingsBulkUpdate($hash, "sender", $sender); 
 								# command
-								fhem($message) if ($message =~ /set .*/i);
+								Get_Message($name, '99', $message);
 							}
 							#else {
 							#	readingsBulkUpdate($hash, "message", 'ignoriert, nicht '.AttrVal($name, 'MatrixSender', '')); 
@@ -466,12 +489,11 @@ sub ParseHttpResponse($)
 							my $sender = $tl->{'sender'};
 							my $message = $tl->{'content'}->{'org.matrix.msc3381.poll.response'}->{'answers'}[0];
 							if (AttrVal($name, 'MatrixSender', '') =~ $sender){
-								readingsBulkUpdate($hash, "answer", $message); 
+								readingsBulkUpdate($hash, "message", $message); 
 								readingsBulkUpdate($hash, "sender", $sender); 
-								# poll.end and 
 								$nextRequest = "question.end" ;
 								# command
-								fhem($message) if ($message =~ /set .*/i);
+								Get_Message($name, $data{MATRIX}{"$name"}{"question"}, $message);
 							}
 						}
 					}
