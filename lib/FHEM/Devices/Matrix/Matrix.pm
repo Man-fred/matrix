@@ -155,6 +155,9 @@ sub Get {
 	if ($cmd eq "wellknown") {
 		return PerformHttpRequest($hash, $cmd, '');
 	}
+	elsif ($cmd eq "logintypes") {
+		return PerformHttpRequest($hash, $cmd, '');
+	}
 	elsif ($cmd eq "sync") {
 		$data{MATRIX}{"$name"}{"FAILS"} = 0;
 		return PerformHttpRequest($hash, $cmd, '');
@@ -163,7 +166,7 @@ sub Get {
 	    return qq("get Matrix $cmd" needs a filter_id to request);
 		return PerformHttpRequest($hash, $cmd, $value);
 	}
-	return "Unknown argument $cmd, choose one of filter sync wellknown";
+	return "Unknown argument $cmd, choose one of logintypes filter sync wellknown";
 }
 
 sub Set {
@@ -259,7 +262,9 @@ sub PerformHttpRequest($$$)
 	my $now  = gettimeofday();
     my $name = $hash->{NAME};
 	my $passwd = "";
-	$passwd = $hash->{helper}->{passwdobj}->getReadPassword($name) if ($def == "login" || $def == "reg2");
+	if ($def eq "login" || $def eq "reg2"){
+		$passwd = $hash->{helper}->{passwdobj}->getReadPassword($name) ;
+	}
 	#Log3($name, 5, "PerformHttpRequest - $name - $passwd");
 	
 	
@@ -280,6 +285,10 @@ sub PerformHttpRequest($$$)
 	}
 	
 	my $device_id = ReadingsVal($name, 'device_id', undef) ? ', "device_id":"'.ReadingsVal($name, 'device_id', undef).'"' : "";
+	if ($def eq "logintypes"){
+      $param->{'url'} =  $hash->{server}."/_matrix/client/r0/login";
+	  $param->{'method'} = 'GET';
+	}
 	if ($def eq "register"){
       $param->{'url'} =  $hash->{server}."/_matrix/client/v3/register";
       $param->{'data'} = '{"type":"m.login.password", "identifier":{ "type":"m.id.user", "user":"'.$hash->{user}.'" }, "password":"'.$passwd.'"}';
@@ -500,6 +509,16 @@ sub ParseHttpResponse($)
 					#push(@roomlist,"$id: ";
 				}
 			}
+		}
+        if ($def eq "logintypes"){
+			my $types = '';
+			foreach my $flow ( $decoded->{'flows'}->@* ) {
+				if ($flow->{'type'} =~ /m\.login\.(.*)/) {
+					#$types .= "$flow->{'type'} ";
+					$types .= "$1 ";# if ($flow->{'type'} );
+				}
+			}
+			readingsBulkUpdate($hash, "logintypes", $types);
 		}
         if ($def eq "filter"){
 			readingsBulkUpdate($hash, "filter_id", $decoded->{'filter_id'}) if ($decoded->{'filter_id'});

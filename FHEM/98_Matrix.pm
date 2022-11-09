@@ -300,6 +300,18 @@ sub Initialize {
     </ul>
     <a id="Matrix-readings"></a>
     <h4>Readings</h4>
-</ul>
+	<ul>
+	  <li><b>device_id</b> - Geräte-ID unter der der MatrixBot registriert ist</li>
+	  <li><b>event_id</b> - ID der letzten Nachricht</li>
+	  <li><b>filter_id</b> - ID des Filters, der Voraussetzung für eine Longpoll-Verbindung zum Server ist</li>
+	  <li><b>home_server</b> - Rückmeldung des Servers unter welchem Namen er erreichbar ist</li>
+	  <li><b>logintypes</b> - unterstützte Login-Möglichkeiten des Servers. Zur Zeit ist "password" die einzige unterstützte Version</li>
+	  <li><b>message</b> - letzte empfangene Nachricht</li>
+	  <li><b>poll</b> - 0: kein Empfang, 1: Empfang eingeschaltet</li>
+	  <li><b>question_id</b> - ID der letzten Frage</li>
+	  <li><b>sender</b> - Sender der letzten Nachricht</li>
+	  <li><b>since</b> - Schlüssel vom Server bis zu welcher Nachricht der Empfang erfolgreich ist</li>
+	  <li><b>user_id</b> - Antwort des Servers welcher Account eingeloggt ist</li>
+	</ul>
 =end html_DE
 =cut
