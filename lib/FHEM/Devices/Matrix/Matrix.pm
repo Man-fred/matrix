@@ -50,7 +50,7 @@ my $Module_Version = '0.0.7';
 my $language = 'EN';
 
 sub Attr_List{
-	return "MatrixRoom MatrixSender MatrixMessage MatrixQuestion_ MatrixQuestion_[0-9]+ MatrixAnswer_ MatrixAnswer_[0-9]+ $readingFnAttributes";
+	return "matrixRoom matrixSender matrixMessage matrixQuestion_ matrixQuestion_[0-9]+ matrixAnswer_ matrixAnswer_[0-9]+ $readingFnAttributes";
 }
 
 sub Define {
@@ -222,17 +222,17 @@ sub Attr {
 	my ($cmd,$name,$attr_name,$attr_value) = @_;
 	Log3($name, 1, "Attr - $cmd - $name - $attr_name - $attr_value");
 	if($cmd eq "set") {
-		if ($attr_name eq "MatrixQuestion_") {
+		if ($attr_name eq "matrixQuestion_") {
 			my @erg = split(/ /, $attr_value, 2);
-			#$_[2] = "MatrixQuestion_n";
+			#$_[2] = "matrixQuestion_n";
 			return qq("attr $name $attr_name" ).I18N('require2') if (!$erg[1] || $erg[0] !~ /[0-9]/);
-			$_[2] = "MatrixQuestion_$erg[0]";
+			$_[2] = "matrixQuestion_$erg[0]";
 			$_[3] = $erg[1];
 		}
-		if ($attr_name eq "MatrixAnswer_") {
+		if ($attr_name eq "matrixAnswer_") {
 			my @erg = split(/ /, $attr_value, 2);
 			return qq(wrong arguments $attr_name") if (!$erg[1] || $erg[0] !~ /[0-9]+/);
-			$_[2] = "MatrixAnswer_$erg[0]";
+			$_[2] = "matrixAnswer_$erg[0]";
 			$_[3] = $erg[1];
 		}
 	}
@@ -242,8 +242,8 @@ sub Attr {
 sub Get_Message($$$) {
 	my($name, $def, $message) = @_;
 	Log3($name, 5, "$name - $def - $message");
-	my $q = AttrVal($name, "MatrixQuestion_$def", "");
-	my $a = AttrVal($name, "MatrixAnswer_$def", "");
+	my $q = AttrVal($name, "matrixQuestion_$def", "");
+	my $a = AttrVal($name, "matrixAnswer_$def", "");
 	my @questions = split(':',$q);
 	shift @questions;
 	my @answers = split(':', $a);
@@ -286,6 +286,7 @@ sub PerformHttpRequest($$$)
 	$data{MATRIX}{"$name"}{'LASTSEND'} = $now;                                # remember when last sent
 	if ($def eq "sync" && $data{MATRIX}{"$name"}{"next_refresh"} < $now){
 		$def = "refresh";
+		Log3($name, 3, qq($name - sync2refresh - $data{MATRIX}{"$name"}{"next_refresh"} < $now) );
 		$data{MATRIX}{"$name"}{"next_refresh"} = $now + 300;
 	}
 	
@@ -319,12 +320,12 @@ sub PerformHttpRequest($$$)
       $param->{'url'} =  $hash->{server}."/.well-known/matrix/client";
  	}
 	if ($def eq "msg"){              
-      $param->{'url'} =  $hash->{server}.'/_matrix/client/r0/rooms/'.AttrVal($name, 'MatrixMessage', '!!').'/send/m.room.message?access_token='.$data{MATRIX}{"$name"}{"access_token"};
+      $param->{'url'} =  $hash->{server}.'/_matrix/client/r0/rooms/'.AttrVal($name, 'matrixMessage', '!!').'/send/m.room.message?access_token='.$data{MATRIX}{"$name"}{"access_token"};
       $param->{'data'} = '{"msgtype":"m.text", "body":"'.$value.'"}';
 	}
 	if ($def eq "question"){ 
 	  $data{MATRIX}{"$name"}{"question"}=$value;
-      $value = AttrVal($name, "MatrixQuestion_$value",""); #  if ($value =~ /[0-9]/);
+      $value = AttrVal($name, "matrixQuestion_$value",""); #  if ($value =~ /[0-9]/);
 	  my @question = split(':',$value);
 	  my $size = @question;
 	  my $answer;
@@ -332,7 +333,7 @@ sub PerformHttpRequest($$$)
 	  $value =~ s/:/<br>/g;
 	  # min. question and one answer
 	  if (int(@question) >= 2){
-		  $param->{'url'} =  $hash->{server}.'/_matrix/client/v3/rooms/'.AttrVal($name, 'MatrixMessage', '!!').
+		  $param->{'url'} =  $hash->{server}.'/_matrix/client/v3/rooms/'.AttrVal($name, 'matrixMessage', '!!').
 			'/send/m.poll.start?access_token='.$data{MATRIX}{"$name"}{"access_token"};
 		  $param->{'data'} = '{"org.matrix.msc3381.poll.start": {"max_selections": 1,'.
 		  '"question": {"org.matrix.msc1767.text": "'.$q.'"},'.
@@ -349,8 +350,8 @@ sub PerformHttpRequest($$$)
 	  }
 	}
 	if ($def eq "questionEnd"){   
-	  $value = ReadingsVal($name, "question_id", "") if (!$value);
-      $param->{'url'} =  $hash->{server}.'/_matrix/client/v3/rooms/'.AttrVal($name, 'MatrixMessage', '!!').'/send/m.poll.end?access_token='.$data{MATRIX}{"$name"}{"access_token"};
+	  $value = ReadingsVal($name, "questionId", "") if (!$value);
+      $param->{'url'} =  $hash->{server}.'/_matrix/client/v3/rooms/'.AttrVal($name, 'matrixMessage', '!!').'/send/m.poll.end?access_token='.$data{MATRIX}{"$name"}{"access_token"};
 	  # ""'.ReadingsVal($name, 'questionEventId', '!!').'
       $param->{'data'} = '{"m.relates_to": {"rel_type": "m.reference","eventId": "'.$value.'"},"org.matrix.msc3381.poll.end": {},'.
                 '"org.matrix.msc1767.text": "Antort '.ReadingsVal($name, "answer", "").' erhalten von '.ReadingsVal($name, "sender", "").'"}';
@@ -378,7 +379,7 @@ sub PerformHttpRequest($$$)
 		  $param->{'data'} .= '"event_fields": ["type","content","sender"],';
 		  $param->{'data'} .= '"event_format": "client", ';
 		  $param->{'data'} .= '"presence": { "senders": [ "@xx:example.com"]}'; # no presence
-		  #$param->{'data'} .= '"room": { "ephemeral": {"rooms": ["'.AttrVal($name, 'MatrixRoom', '!!').'"],"types": ["m.receipt"]}, "state": {"types": ["m.room.*"]},"timeline": {"types": ["m.room.message"] } }';
+		  #$param->{'data'} .= '"room": { "ephemeral": {"rooms": ["'.AttrVal($name, 'matrixRoom', '!!').'"],"types": ["m.receipt"]}, "state": {"types": ["m.room.*"]},"timeline": {"types": ["m.room.message"] } }';
 		  $param->{'data'} .= '}';
 	  }
 	}
@@ -409,8 +410,8 @@ sub ParseHttpResponse($)
 	readingsBulkUpdate($hash, "httpStatus", $param->{code});
 	$hash->{STATE} = $def.' - '.$param->{code};
     if($err ne "") {                                                         # wenn ein Fehler bei der HTTP Abfrage aufgetreten ist
-        Log3($name, 3, "error while requesting ".$param->{url}." - $err");    # Eintrag fürs Log
-        readingsBulkUpdate($hash, "fullResponse", "ERROR ".$err);            # Readings erzeugen
+        Log3($name, 2, "error while requesting ".$param->{url}." - $err");   # Eintrag fürs Log
+        readingsBulkUpdate($hash, "responseError", $err);                    # Reading erzeugen
 		$data{MATRIX}{"$name"}{"FAILS"} = 3;
     }
     elsif($data ne "") {                                                     # wenn die Abfrage erfolgreich war ($data enthält die Ergebnisdaten des HTTP Aufrufes)
@@ -421,6 +422,7 @@ sub ParseHttpResponse($)
 			$data{MATRIX}{"$name"}{"FAILS"} = 0;
 		} else {
 			$data{MATRIX}{"$name"}{"FAILS"}++;
+			readingsBulkUpdate($hash, "responseError", $data{MATRIX}{"$name"}{"FAILS"}.' - '.$data);        
 		}
         # readingsBulkUpdate($hash, "fullResponse", $data); 
 		
@@ -447,18 +449,20 @@ sub ParseHttpResponse($)
 			$data{MATRIX}{"$name"}{"session"} = $decoded->{'session'};
 			$nextRequest = "";#"reg2";
 		}
-        if ($param->{code} == 200 && ($def eq  "reg2" || $def eq  "login" || $def eq "refresh")){
-			readingsBulkUpdate($hash, "userId", $decoded->{'userId'}) if ($decoded->{'userId'});
-			readingsBulkUpdate($hash, "homeServer", $decoded->{'homeServer'}) if ($decoded->{'homeServer'});
-			readingsBulkUpdate($hash, "deviceId", $decoded->{'deviceId'}) if ($decoded->{'deviceId'});
-		  	readingsBulkUpdate($hash, "last_register", $param->{code}) if $def eq  "reg2";
-		  	readingsBulkUpdate($hash, "last_login",  $param->{code}) if $def eq  "login";
-		  	readingsBulkUpdate($hash, "last_refresh", $param->{code}) if $def eq  "refresh";
-			
-			$data{MATRIX}{"$name"}{"expires"} = $decoded->{'expires_in_ms'} if ($decoded->{'expires_in_ms'});
-			$data{MATRIX}{"$name"}{"refresh_token"} = $decoded->{'refresh_token'} if ($decoded->{'refresh_token'}); 
-			$data{MATRIX}{"$name"}{"access_token"} =  $decoded->{'access_token'} if ($decoded->{'access_token'});
-			$data{MATRIX}{"$name"}{"next_refresh"} = $now + $data{MATRIX}{"$name"}{"expires"}/1000 - 60; # refresh one minute before end
+		if ($def eq  "reg2" || $def eq  "login" || $def eq "refresh") {
+			readingsBulkUpdate($hash, "lastRegister", $param->{code}) if $def eq  "reg2";
+			readingsBulkUpdate($hash, "lastLogin",  $param->{code}) if $def eq  "login";
+			readingsBulkUpdate($hash, "lastRefresh", $param->{code}) if $def eq  "refresh";
+			if ($param->{code} == 200){
+				readingsBulkUpdate($hash, "userId", $decoded->{'userId'}) if ($decoded->{'userId'});
+				readingsBulkUpdate($hash, "homeServer", $decoded->{'homeServer'}) if ($decoded->{'homeServer'});
+				readingsBulkUpdate($hash, "deviceId", $decoded->{'deviceId'}) if ($decoded->{'deviceId'});
+				
+				$data{MATRIX}{"$name"}{"expires"} = $decoded->{'expires_in_ms'} if ($decoded->{'expires_in_ms'});
+				$data{MATRIX}{"$name"}{"refresh_token"} = $decoded->{'refresh_token'} if ($decoded->{'refresh_token'}); 
+				$data{MATRIX}{"$name"}{"access_token"} =  $decoded->{'access_token'} if ($decoded->{'access_token'});
+				$data{MATRIX}{"$name"}{"next_refresh"} = $now + $data{MATRIX}{"$name"}{"expires"}/1000 - 60; # refresh one minute before end
+			}
 		}
         if ($def eq "wellknown"){
 			# https://spec.matrix.org/unstable/client-server-api/
@@ -474,9 +478,9 @@ sub ParseHttpResponse($)
 					my $member = "";
 					#my $room = $list->{$id};
 					$pos = $pos + 1;
-					# MatrixRoom ?
+					# matrixRoom ?
 					readingsBulkUpdate($hash, "room$pos.id", $id); 
-					#foreach my $id ( $decoded->{'rooms'}->{'join'}->{AttrVal($name, 'MatrixRoom', '!!')}->{'timeline'}->{'events'}->@* ) {
+					#foreach my $id ( $decoded->{'rooms'}->{'join'}->{AttrVal($name, 'matrixRoom', '!!')}->{'timeline'}->{'events'}->@* ) {
 					foreach my $ev ( $list->{$id}->{'state'}->{'events'}->@* ) {
 						readingsBulkUpdate($hash, "room$pos.topic", $ev->{'content'}->{'topic'}) if ($ev->{'type'} eq 'm.room.topic'); 
 						readingsBulkUpdate($hash, "room$pos.name", $ev->{'content'}->{'name'}) if ($ev->{'type'} eq 'm.room.name'); 
@@ -489,20 +493,20 @@ sub ParseHttpResponse($)
 						if ($tl->{'type'} eq 'm.room.message' && $tl->{'content'}->{'msgtype'} eq 'm.text'){
 							my $sender = $tl->{'sender'};
 							my $message = $tl->{'content'}->{'body'};
-							if (AttrVal($name, 'MatrixSender', '') =~ $sender){
+							if (AttrVal($name, 'matrixSender', '') =~ $sender){
 								readingsBulkUpdate($hash, "message", $message); 
 								readingsBulkUpdate($hash, "sender", $sender); 
 								# command
 								Get_Message($name, '99', $message);
 							}
 							#else {
-							#	readingsBulkUpdate($hash, "message", 'ignoriert, nicht '.AttrVal($name, 'MatrixSender', '')); 
+							#	readingsBulkUpdate($hash, "message", 'ignoriert, nicht '.AttrVal($name, 'matrixSender', '')); 
 							#	readingsBulkUpdate($hash, "sender", $sender); 
 							#}
 						} elsif ($tl->{'type'} eq "org.matrix.msc3381.poll.response"){
 							my $sender = $tl->{'sender'};
 							my $message = $tl->{'content'}->{'org.matrix.msc3381.poll.response'}->{'answers'}[0];
-							if (AttrVal($name, 'MatrixSender', '') =~ $sender){
+							if (AttrVal($name, 'matrixSender', '') =~ $sender){
 								readingsBulkUpdate($hash, "message", $message); 
 								readingsBulkUpdate($hash, "sender", $sender); 
 								$nextRequest = "questionEnd" ;
@@ -533,12 +537,12 @@ sub ParseHttpResponse($)
 			#m.relates_to
 		}
         if ($def eq "question"){
-			readingsBulkUpdate($hash, "question_id", $decoded->{'eventId'}) if ($decoded->{'eventId'});
+			readingsBulkUpdate($hash, "questionId", $decoded->{'eventId'}) if ($decoded->{'eventId'});
 			#m.relates_to
 		}
         if ($def eq "questionEnd"){
 			readingsBulkUpdate($hash, "eventId", $decoded->{'eventId'}) if ($decoded->{'eventId'});
-			readingsBulkUpdate($hash, "question_id", "") if ($decoded->{'eventId'});
+			readingsBulkUpdate($hash, "questionId", "") if ($decoded->{'eventId'});
 			#m.relates_to
 		}
 	}

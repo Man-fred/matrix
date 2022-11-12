@@ -45,13 +45,13 @@ BEGIN {
         Initialize
     ));
     GP_Import(qw(
-		readingFnAttributes
-	));
+        readingFnAttributes
+    ));
 }
 
 sub Initialize {
     my ($hash) = @_;
-	
+    
     $hash->{DefFn}      = \&FHEM::Devices::Matrix::Define;
     $hash->{UndefFn}    = \&FHEM::Devices::Matrix::Undef;
     $hash->{SetFn}      = \&FHEM::Devices::Matrix::Set;
@@ -88,8 +88,8 @@ sub Initialize {
         Example: <code>define matrix Matrix matrix.com fhem</code>
         <br><br>
         noch ins Englische: 
-		1. Anmerkung: Zur einfachen Einrichtung habe ich einen Matrix-Element-Client mit "--profile=fhem" gestartet und dort die Registrierung und die Räume vorbereitet. Achtung: alle Räume müssen noch unverschlüsselt sein um FHEM anzubinden. Alle Einladungen in Räume und Annehmen von Einladungen geht hier viel einfacher. Aus dem Element-Client dann die Raum-IDs merken für das Modul.<br/>
-		2. Anmerkung: sets, gets, Attribute und Readings müssen noch besser bezeichnet werden.
+        1. Anmerkung: Zur einfachen Einrichtung habe ich einen Matrix-Element-Client mit "--profile=fhem" gestartet und dort die Registrierung und die Räume vorbereitet. Achtung: alle Räume müssen noch unverschlüsselt sein um FHEM anzubinden. Alle Einladungen in Räume und Annehmen von Einladungen geht hier viel einfacher. Aus dem Element-Client dann die Raum-IDs merken für das Modul.<br/>
+        2. Anmerkung: sets, gets, Attribute und Readings müssen noch besser bezeichnet werden.
     </ul>
     <br>
     
@@ -103,7 +103,7 @@ sub Initialize {
         Options:
         <ul>
               <a id="Matrix-set-password"></a>
-			  <li><i>password</i><br>
+              <li><i>password</i><br>
                   Set the password to login</li>
               <a id="Matrix-set-register"></a>
               <li><i>register</i><br>
@@ -124,7 +124,7 @@ sub Initialize {
               <li><i>pollFullstate</i><br>
                   Defaults to "0": Set pollFullstate to "1" for getting in the next sync a full state of all rooms</li>
               <a id="Matrix-set-question"></a>
-              <li><i>question.start</i><br>
+              <li><i>question</i><br>
                   Start a question in the room from reading room. The first answer to the question is logged and ends the question.</li>
               <a id="Matrix-set-questionEnd"></a>
               <li><i>questionEnd</i><br>
@@ -151,34 +151,34 @@ sub Initialize {
         <br><br>
         Attributes:
         <ul>
-			<a id="Matrix-attr-MatrixMessage"></a>
+            <a id="Matrix-attr-MatrixMessage"></a>
             <li><i>MatrixMessage</i> &lt;room-id&gt;<br>
                 Set the room-id to wich  messagesare sent.
             </li>
-			<a id="Matrix-attr-MatrixQuestion_"></a>
+            <a id="Matrix-attr-MatrixQuestion_"></a>
             <li><i>MatrixQuestion_[0..9]+</i> &lt;question&gt;:&lt;answer 1&gt;:&lt;answer 2&gt;:...&lt;answer max. 20&gt;<br>
                 Prepared questions.
             </li>
-			<a id="Matrix-attr-MatrixQuestion__0-9__"></a>
+            <a id="Matrix-attr-MatrixQuestion__0-9__"></a>
             <li><i>MatrixQuestion_[0..9]+</i> &lt;question&gt;:&lt;answer 1&gt;:&lt;answer 2&gt;:...&lt;answer max. 20&gt;<br>
                 Prepared questions.
             </li>
-			<a id="Matrix-attr-MatrixAnswer_"></a>
-            <li><i>MatrixAnswer_[0..9]</i><br>
+            <a id="Matrix-attr-matrixAnswer_"></a>
+            <li><i>matrixAnswer_[0..9]</i><br>
                 Prepared commands.
             </li>
-			<a id="Matrix-attr-MatrixAnswer__0-9__"></a>
-            <li><i>MatrixAnswer_[0..9]</i><br>
+            <a id="Matrix-attr-matrixAnswer__0-9__"></a>
+            <li><i>matrixAnswer_[0..9]</i><br>
                 Prepared commands.
             </li>
-			<a id="Matrix-attr-MatrixRoom"></a>
+            <a id="Matrix-attr-MatrixRoom"></a>
             <li><i>MatrixRoom</i> &lt;room-id 1&gt; &lt;room-id 2&gt; ...<br>
                 Set the room-id's from wich are messages received.
             </li>
-			<a id="Matrix-attr-MatrixSender"></a>
+            <a id="Matrix-attr-MatrixSender"></a>
             <li><i>MatrixSender</i> <code>&lt;user 1&gt; &lt;user 2&gt; ...</code><br>
                 Set the user's from wich are messages received.<br><br>
-				Example: <code>attr matrix MatrixSender @name:matrix.server @second.name:matrix.server</code><br>
+                Example: <code>attr matrix MatrixSender @name:matrix.server @second.name:matrix.server</code><br>
             </li>
         </ul>
     </ul>
@@ -202,7 +202,7 @@ sub Initialize {
         Beispiel: <code>define matrix Matrix matrix.com fhem</code>
         <br><br>
         1. Anmerkung: Zur einfachen Einrichtung habe ich einen Matrix-Element-Client mit "--profile=fhem" gestartet und dort die Registrierung und die Räume vorbereitet. Achtung: alle Räume müssen noch unverschlüsselt sein um FHEM anzubinden. Alle Einladungen in Räume und Annehmen von Einladungen geht hier viel einfacher. Aus dem Element-Client dann die Raum-IDs merken für das Modul.<br/>
-		2. Anmerkung: sets, gets, Attribute und Readings müssen noch besser bezeichnet werden.
+        2. Anmerkung: sets, gets, Attribute und Readings müssen noch besser bezeichnet werden.
     </ul>
     <br>
     
@@ -216,7 +216,7 @@ sub Initialize {
         Options:
         <ul>
               <a id="Matrix-set-password"></a>
-			  <li><i>password</i><br>
+              <li><i>password</i><br>
                   Setzt das Passwort zum Login</li>
               <a id="Matrix-set-register"></a>
               <li><i>register</i><br>
@@ -239,8 +239,8 @@ sub Initialize {
               <a id="Matrix-set-question"></a>
               <li><i>question.start</i><br>
                   Frage in dem Raum des Attributs "MatrixMessage" stellen. Die erste Antwort steht im Reading "answer" und beendet die Frage.<br>
-				  Als Wert wird entweder die Nummer einer vorbereiteten Frage übergeben oder eine komplette Frage in der Form<br>
-				  <code>Frage:Antwort 1:Antwort 2:....:Antwort n</code></li>
+                  Als Wert wird entweder die Nummer einer vorbereiteten Frage übergeben oder eine komplette Frage in der Form<br>
+                  <code>Frage:Antwort 1:Antwort 2:....:Antwort n</code></li>
               <a id="Matrix-set-questionEnd"></a>
               <li><i>questionEnd</i><br>
                   Die gestartete Frage ohne Antwort beenden. Entweder wird ohne Parameter die aktuelle Frage beendet oder mit einer Nachrichten-ID eine "verwaiste" Frage.</li>
@@ -266,56 +266,60 @@ sub Initialize {
         <br><br>
         Attributes:
         <ul>
-			<a id="Matrix-attr-MatrixMessage"></a>
+            <a id="Matrix-attr-MatrixMessage"></a>
             <li><i>MatrixMessage</i> &lt;room-id&gt;<br>
                 Setzt die Raum-ID in die alle Nachrichten gesendet werden. Zur Zeit ist nur ein Raum möglich.
             </li>
-			<a id="Matrix-attr-MatrixAnswer_"></a>
-            <li><i>MatrixAnswer_</i><br>
+            <a id="Matrix-attr-matrixAnswer_"></a>
+            <li><i>matrixAnswer_</i><br>
                 Antworten = Befehle ausführen ist noch nicht freigegeben
             </li>
-			<a id="Matrix-attr-MatrixAnswer__0-9__"></a>
-            <li><i>MatrixAnswer_[0-9]+</i><br>
+            <a id="Matrix-attr-matrixAnswer__0-9__"></a>
+            <li><i>matrixAnswer_[0-9]+</i><br>
                 Antworten = Befehle ausführen ist noch nicht freigegeben
             </li>
-			<a id="Matrix-attr-MatrixQuestion_"></a>
+            <a id="Matrix-attr-MatrixQuestion_"></a>
             <li><i>MatrixQuestion_</i> <br>
                 Vorbereitete Fragen, die mit set mt question.start 0..9 gestartet werden können. Es sind maximal 20 Antworten möglich.<br>
-				Format der Fragen: <code>Frage:Antwort 1:Antwort 2:....:Antwort n</code>
-				Eingabe in der Attribut-Liste: <code>[0-9]+ Frage:Antwort 1:Antwort 2:....:Antwort n</code>
+                Format der Fragen: <code>Frage:Antwort 1:Antwort 2:....:Antwort n</code>
+                Eingabe in der Attribut-Liste: <code>[0-9]+ Frage:Antwort 1:Antwort 2:....:Antwort n</code>
             </li>
-			<a id="Matrix-attr-MatrixQuestion__0-9__"></a>
+            <a id="Matrix-attr-MatrixQuestion__0-9__"></a>
             <li><i>MatrixQuestion_[0-9]+</i><br>
                 Vorbereitete Fragen, die mit set mt question.start 0..9 gestartet werden können. Es sind maximal 20 Antworten möglich.<br>
-				Format der Fragen: <code>Frage:Antwort 1:Antwort 2:....:Antwort n</code>
-				Eingabe in der Attribut-Liste: <code>[0-9]+ Frage:Antwort 1:Antwort 2:....:Antwort n</code>
+                Format der Fragen: <code>Frage:Antwort 1:Antwort 2:....:Antwort n</code>
+                Eingabe in der Attribut-Liste: <code>[0-9]+ Frage:Antwort 1:Antwort 2:....:Antwort n</code>
             </li>
-			<a id="Matrix-attr-MatrixRoom"></a>
+            <a id="Matrix-attr-MatrixRoom"></a>
             <li><i>MatrixRoom</i> &lt;room-id 1&gt; &lt;room-id 2&gt; ...<br>
                 Alle Raum-ID's aus denen Nachrichten empfangen werden.
             </li>
-			<a id="Matrix-attr-MatrixSender"></a>
+            <a id="Matrix-attr-MatrixSender"></a>
             <li><i>MatrixSender</i> <code>&lt;user 1&gt; &lt;user 2&gt; ...</code><br>
                 Alle Personen von denen Nachrichten empfangen werden.<br>
-				Beispiel: <code>attr matrix MatrixSender @name:matrix.server @second.name:matrix.server</code><br>
+                Beispiel: <code>attr matrix MatrixSender @name:matrix.server @second.name:matrix.server</code><br>
             </li>
         </ul>
     </ul>
     <a id="Matrix-readings"></a>
     <h4>Readings</h4>
-	<ul>
-	  <li><b>deviceId</b> - Geräte-ID unter der der MatrixBot registriert ist</li>
-	  <li><b>eventId</b> - ID der letzten Nachricht</li>
-	  <li><b>filterId</b> - ID des Filters, der Voraussetzung für eine Longpoll-Verbindung zum Server ist</li>
-	  <li><b>homeServer</b> - Rückmeldung des Servers unter welchem Namen er erreichbar ist</li>
-	  <li><b>logintypes</b> - unterstützte Login-Möglichkeiten des Servers. Zur Zeit ist "password" die einzige unterstützte Version</li>
-	  <li><b>message</b> - letzte empfangene Nachricht</li>
-	  <li><b>poll</b> - 0: kein Empfang, 1: Empfang eingeschaltet</li>
-	  <li><b>question_id</b> - ID der letzten Frage</li>
-	  <li><b>sender</b> - Sender der letzten Nachricht</li>
-	  <li><b>since</b> - Schlüssel vom Server bis zu welcher Nachricht der Empfang erfolgreich ist</li>
-	  <li><b>userId</b> - Antwort des Servers welcher Account eingeloggt ist</li>
-	</ul>
+    <ul>
+      <li><b>deviceId</b> - Geräte-ID unter der der MatrixBot registriert ist</li>
+      <li><b>eventId</b> - ID der letzten Nachricht</li>
+      <li><b>filterId</b> - ID des Filters, der Voraussetzung für eine Longpoll-Verbindung zum Server ist</li>
+      <li><b>homeServer</b> - Rückmeldung des Servers unter welchem Namen er erreichbar ist</li>
+      <li><b>httpStatus</b> - Statuscode der letzten Serverantwort</li>
+      <li><b>lastLogin</b> - Statuscode und Zeit des letzten Logins</li>
+      <li><b>lastRefresh</b> - Statuscode und Zeit des letzten erhaltenen Accesstokens</li>
+      <li><b>logintypes</b> - unterstützte Login-Möglichkeiten des Servers. Zur Zeit ist "password" die einzige unterstützte Version</li>
+      <li><b>message</b> - letzte empfangene Nachricht</li>
+      <li><b>poll</b> - 0: kein Empfang, 1: Empfang eingeschaltet</li>
+      <li><b>questionId</b> - ID der letzten Frage</li>
+      <li><b>requestError</b> - Letzte Serveranfrage mit Fehlerantwort</li>
+      <li><b>sender</b> - Sender der letzten Nachricht</li>
+      <li><b>since</b> - Schlüssel vom Server bis zu welcher Nachricht der Empfang erfolgreich ist</li>
+      <li><b>userId</b> - Antwort des Servers welcher Account eingeloggt ist</li>
+    </ul>
 </ul>
 
 =end html_DE
