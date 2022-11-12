@@ -2,7 +2,12 @@
 # Usage:
 #
 ##########################################################################
-# $Id: Matrix.pm 21301 2022-11-06 12:52:00Z Man-fred $
+# $Id: Matrix.pm 22821 2022-11-12 12:52:00Z Man-fred $
+#
+# from the developerpages:
+# Verwendung von lowerCamelCaps für a) die Bezeichnungen der Behälter für Readings, Fhem und Helper und der Untereintraege, 
+#                                   b) die Bezeichnungen der Readings, 
+#                                   c) die Bezeichnungen der Attribute.
 
 package FHEM::Devices::Matrix;
 use strict;
@@ -163,7 +168,7 @@ sub Get {
 		return PerformHttpRequest($hash, $cmd, '');
 	}
 	elsif ($cmd eq "filter") {
-	    return qq("get Matrix $cmd" needs a filter_id to request);
+	    return qq("get Matrix $cmd" needs a filterId to request);
 		return PerformHttpRequest($hash, $cmd, $value);
 	}
 	return "Unknown argument $cmd, choose one of logintypes filter sync wellknown";
@@ -180,7 +185,7 @@ sub Set {
 	if ($cmd eq "msg") {
 		return PerformHttpRequest($hash, $cmd, $value);
 	}
-	elsif ($cmd eq "poll" || $cmd eq "poll.fullstate") {
+	elsif ($cmd eq "poll" || $cmd eq "pollFullstate") {
 		readingsSingleUpdate($hash, $cmd, $value, 1);                                                        # Readings erzeugen
 	}
 	elsif ($cmd eq "password") {
@@ -193,7 +198,7 @@ sub Set {
 	elsif ($cmd eq "question") {
 		return PerformHttpRequest($hash, $cmd, $value);
 	}
-	elsif ($cmd eq "question.end") {
+	elsif ($cmd eq "questionEnd") {
 		return PerformHttpRequest($hash, $cmd, $value);
 	}
 	elsif ($cmd eq "register") {
@@ -206,7 +211,7 @@ sub Set {
 		return PerformHttpRequest($hash, $cmd, '');
 	}
     else {		
-		return "Unknown argument $cmd, choose one of filter:noArg password question question.end poll:0,1 poll.fullstate:0,1 msg register login:noArg refresh:noArg";
+		return "Unknown argument $cmd, choose one of filter:noArg password question questionEnd poll:0,1 pollFullstate:0,1 msg register login:noArg refresh:noArg";
 	}
     
 	#return "$opt set to $value. Try to get it.";
@@ -284,7 +289,7 @@ sub PerformHttpRequest($$$)
 		$data{MATRIX}{"$name"}{"next_refresh"} = $now + 300;
 	}
 	
-	my $device_id = ReadingsVal($name, 'device_id', undef) ? ', "device_id":"'.ReadingsVal($name, 'device_id', undef).'"' : "";
+	my $deviceId = ReadingsVal($name, 'deviceId', undef) ? ', "deviceId":"'.ReadingsVal($name, 'deviceId', undef).'"' : "";
 	if ($def eq "logintypes"){
       $param->{'url'} =  $hash->{server}."/_matrix/client/r0/login";
 	  $param->{'method'} = 'GET';
@@ -304,7 +309,7 @@ sub PerformHttpRequest($$$)
 	if ($def eq "login"){
       $param->{'url'} =  $hash->{server}."/_matrix/client/v3/login";
       $param->{'data'} = '{"type":"m.login.password", "refresh_token": true, "identifier":{ "type":"m.id.user", "user":"'.$hash->{user}.'" }, "password":"'.$passwd.'"'
-	                     .$device_id.'}';
+	                     .$deviceId.'}';
 	}
 	if ($def eq "refresh"){              
       $param->{'url'} =  $hash->{server}.'/_matrix/client/v1/refresh'; 
@@ -343,32 +348,32 @@ sub PerformHttpRequest($$$)
 		  return;
 	  }
 	}
-	if ($def eq "question.end"){   
+	if ($def eq "questionEnd"){   
 	  $value = ReadingsVal($name, "question_id", "") if (!$value);
       $param->{'url'} =  $hash->{server}.'/_matrix/client/v3/rooms/'.AttrVal($name, 'MatrixMessage', '!!').'/send/m.poll.end?access_token='.$data{MATRIX}{"$name"}{"access_token"};
 	  # ""'.ReadingsVal($name, 'questionEventId', '!!').'
-      $param->{'data'} = '{"m.relates_to": {"rel_type": "m.reference","event_id": "'.$value.'"},"org.matrix.msc3381.poll.end": {},'.
+      $param->{'data'} = '{"m.relates_to": {"rel_type": "m.reference","eventId": "'.$value.'"},"org.matrix.msc3381.poll.end": {},'.
                 '"org.matrix.msc1767.text": "Antort '.ReadingsVal($name, "answer", "").' erhalten von '.ReadingsVal($name, "sender", "").'"}';
 	}
 	if ($def eq "sync"){  
 		my $since = ReadingsVal($name, "since", undef) ? '&since='.ReadingsVal($name, "since", undef) : "";
-		my $full_state = ReadingsVal($name, "poll.fullstate",undef);
+		my $full_state = ReadingsVal($name, "pollFullstate",undef);
 		if ($full_state){
 			$full_state = "&full_state=true";
-			readingsSingleUpdate($hash, "poll.fullstate", 0, 1);
+			readingsSingleUpdate($hash, "pollFullstate", 0, 1);
 		} else {
 			$full_state = "";
 		}
-		$param->{'url'} =  $hash->{server}.'/_matrix/client/r0/sync?access_token='.$data{MATRIX}{"$name"}{"access_token"}.$since.$full_state.'&timeout=50000&filter='.ReadingsVal($name, 'filter_id',0);
+		$param->{'url'} =  $hash->{server}.'/_matrix/client/r0/sync?access_token='.$data{MATRIX}{"$name"}{"access_token"}.$since.$full_state.'&timeout=50000&filter='.ReadingsVal($name, 'filterId',0);
 		$param->{'method'} = 'GET';
 		$param->{'timeout'} = 60;
 	}
 	if ($def eq "filter"){
       if ($value){ # get
-		  $param->{'url'} =  $hash->{server}.'/_matrix/client/v3/user/'.ReadingsVal($name, "user_id",0).'/filter/'.$value.'?access_token='.$data{MATRIX}{"$name"}{"access_token"};
+		  $param->{'url'} =  $hash->{server}.'/_matrix/client/v3/user/'.ReadingsVal($name, "userId",0).'/filter/'.$value.'?access_token='.$data{MATRIX}{"$name"}{"access_token"};
 		  $param->{'method'} = 'GET';
 	  } else {	  
-		  $param->{'url'} =  $hash->{server}.'/_matrix/client/v3/user/'.ReadingsVal($name, "user_id",0).'/filter?access_token='.$data{MATRIX}{"$name"}{"access_token"};
+		  $param->{'url'} =  $hash->{server}.'/_matrix/client/v3/user/'.ReadingsVal($name, "userId",0).'/filter?access_token='.$data{MATRIX}{"$name"}{"access_token"};
 		  $param->{'data'} = '{';
 		  $param->{'data'} .= '"event_fields": ["type","content","sender"],';
 		  $param->{'data'} .= '"event_format": "client", ';
@@ -443,9 +448,9 @@ sub ParseHttpResponse($)
 			$nextRequest = "";#"reg2";
 		}
         if ($param->{code} == 200 && ($def eq  "reg2" || $def eq  "login" || $def eq "refresh")){
-			readingsBulkUpdate($hash, "user_id", $decoded->{'user_id'}) if ($decoded->{'user_id'});
-			readingsBulkUpdate($hash, "home_server", $decoded->{'home_server'}) if ($decoded->{'home_server'});
-			readingsBulkUpdate($hash, "device_id", $decoded->{'device_id'}) if ($decoded->{'device_id'});
+			readingsBulkUpdate($hash, "userId", $decoded->{'userId'}) if ($decoded->{'userId'});
+			readingsBulkUpdate($hash, "homeServer", $decoded->{'homeServer'}) if ($decoded->{'homeServer'});
+			readingsBulkUpdate($hash, "deviceId", $decoded->{'deviceId'}) if ($decoded->{'deviceId'});
 		  	readingsBulkUpdate($hash, "last_register", $param->{code}) if $def eq  "reg2";
 		  	readingsBulkUpdate($hash, "last_login",  $param->{code}) if $def eq  "login";
 		  	readingsBulkUpdate($hash, "last_refresh", $param->{code}) if $def eq  "refresh";
@@ -500,7 +505,7 @@ sub ParseHttpResponse($)
 							if (AttrVal($name, 'MatrixSender', '') =~ $sender){
 								readingsBulkUpdate($hash, "message", $message); 
 								readingsBulkUpdate($hash, "sender", $sender); 
-								$nextRequest = "question.end" ;
+								$nextRequest = "questionEnd" ;
 								# command
 								Get_Message($name, $data{MATRIX}{"$name"}{"question"}, $message);
 							}
@@ -521,19 +526,19 @@ sub ParseHttpResponse($)
 			readingsBulkUpdate($hash, "logintypes", $types);
 		}
         if ($def eq "filter"){
-			readingsBulkUpdate($hash, "filter_id", $decoded->{'filter_id'}) if ($decoded->{'filter_id'});
+			readingsBulkUpdate($hash, "filterId", $decoded->{'filterId'}) if ($decoded->{'filterId'});
 		}
         if ($def eq "msg" ){
-			readingsBulkUpdate($hash, "event_id", $decoded->{'event_id'}) if ($decoded->{'event_id'});
+			readingsBulkUpdate($hash, "eventId", $decoded->{'eventId'}) if ($decoded->{'eventId'});
 			#m.relates_to
 		}
         if ($def eq "question"){
-			readingsBulkUpdate($hash, "question_id", $decoded->{'event_id'}) if ($decoded->{'event_id'});
+			readingsBulkUpdate($hash, "question_id", $decoded->{'eventId'}) if ($decoded->{'eventId'});
 			#m.relates_to
 		}
-        if ($def eq "question.end"){
-			readingsBulkUpdate($hash, "event_id", $decoded->{'event_id'}) if ($decoded->{'event_id'});
-			readingsBulkUpdate($hash, "question_id", "") if ($decoded->{'event_id'});
+        if ($def eq "questionEnd"){
+			readingsBulkUpdate($hash, "eventId", $decoded->{'eventId'}) if ($decoded->{'eventId'});
+			readingsBulkUpdate($hash, "question_id", "") if ($decoded->{'eventId'});
 			#m.relates_to
 		}
 	}

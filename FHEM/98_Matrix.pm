@@ -23,7 +23,7 @@
 # Usage:
 #
 ##########################################################################
-# $Id: 98_Matrix.pm 13172 2022-11-06 12:52:00Z Man-fred $
+# $Id: 98_Matrix.pm 14063 2022-11-12 12:52:00Z Man-fred $
 
 package FHEM::Devices::Matrix;
 use strict;
@@ -74,6 +74,7 @@ sub Initialize {
 =item summary Provides a Matrix-Chatbot.
 =item summary_DE Stellt einen Matrix-Chatbot bereit.
 =begin html
+
 <a id="Matrix"></a>
 <h3>Matrix</h3>
 <ul>
@@ -115,18 +116,18 @@ sub Initialize {
                   If logged in or in state "soft-logout" refresh gets a new access_token and syncs endless if poll is set to "1"</li>
               <a id="Matrix-set-filter"></a>
               <li><i>filter</i><br>
-                  A Filter must be set for syncing in long poll. This filter is in the moment experimentell and must be set manual to get the coresponding filter_id</li>
+                  A Filter must be set for syncing in long poll. This filter is in the moment experimentell and must be set manual to get the coresponding filterId</li>
               <a id="Matrix-set-poll"></a>
               <li><i>poll</i><br>
                   Defaults to "0": Set poll to "1" for starting the sync-loop</li>
-              <a id="Matrix-set-poll.fullstate"></a>
-              <li><i>poll.fullstate</i><br>
-                  Defaults to "0": Set poll.fullstate to "1" for getting in the next sync a full state of all rooms</li>
-              <a id="Matrix-set-question.start"></a>
+              <a id="Matrix-set-pollFullstate"></a>
+              <li><i>pollFullstate</i><br>
+                  Defaults to "0": Set pollFullstate to "1" for getting in the next sync a full state of all rooms</li>
+              <a id="Matrix-set-question"></a>
               <li><i>question.start</i><br>
                   Start a question in the room from reading room. The first answer to the question is logged and ends the question.</li>
-              <a id="Matrix-set-question.end"></a>
-              <li><i>question.end</i><br>
+              <a id="Matrix-set-questionEnd"></a>
+              <li><i>questionEnd</i><br>
                   Stop a question also it is not answered.</li>
         </ul>
     </ul>
@@ -184,8 +185,10 @@ sub Initialize {
     <a id="Matrix-readings"></a>
     <h4>Readings</h4>
 </ul>
+
 =end html
 =begin html_DE
+
 <a id="Matrix"></a>
 <h3>Matrix</h3>
 <ul>
@@ -230,16 +233,16 @@ sub Initialize {
               <a id="Matrix-set-poll"></a>
               <li><i>poll</i><br>
                   Zunächst "0": Auf "1" startet die Empfangsschleife.</li>
-              <a id="Matrix-set-poll.fullstate"></a>
-              <li><i>poll.fullstate</i><br>
-                  Standard ist "0": Wenn poll.fullstate auf "1" gesetzt wird, werden beider nächsten Synchronisation alle Raumeigenschaften neu eingelesen.</li>
-              <a id="Matrix-set-question.start"></a>
+              <a id="Matrix-set-pollFullstate"></a>
+              <li><i>pollFullstate</i><br>
+                  Standard ist "0": Wenn pollFullstate auf "1" gesetzt wird, werden beider nächsten Synchronisation alle Raumeigenschaften neu eingelesen.</li>
+              <a id="Matrix-set-question"></a>
               <li><i>question.start</i><br>
                   Frage in dem Raum des Attributs "MatrixMessage" stellen. Die erste Antwort steht im Reading "answer" und beendet die Frage.<br>
 				  Als Wert wird entweder die Nummer einer vorbereiteten Frage übergeben oder eine komplette Frage in der Form<br>
 				  <code>Frage:Antwort 1:Antwort 2:....:Antwort n</code></li>
-              <a id="Matrix-set-question.end"></a>
-              <li><i>question.end</i><br>
+              <a id="Matrix-set-questionEnd"></a>
+              <li><i>questionEnd</i><br>
                   Die gestartete Frage ohne Antwort beenden. Entweder wird ohne Parameter die aktuelle Frage beendet oder mit einer Nachrichten-ID eine "verwaiste" Frage.</li>
         </ul>
     </ul>
@@ -269,11 +272,11 @@ sub Initialize {
             </li>
 			<a id="Matrix-attr-MatrixAnswer_"></a>
             <li><i>MatrixAnswer_</i><br>
-                Antworten = Befehle ausführen ist noch nicht freigegeben</code>
+                Antworten = Befehle ausführen ist noch nicht freigegeben
             </li>
 			<a id="Matrix-attr-MatrixAnswer__0-9__"></a>
             <li><i>MatrixAnswer_[0-9]+</i><br>
-                Antworten = Befehle ausführen ist noch nicht freigegeben</code>
+                Antworten = Befehle ausführen ist noch nicht freigegeben
             </li>
 			<a id="Matrix-attr-MatrixQuestion_"></a>
             <li><i>MatrixQuestion_</i> <br>
@@ -301,17 +304,19 @@ sub Initialize {
     <a id="Matrix-readings"></a>
     <h4>Readings</h4>
 	<ul>
-	  <li><b>device_id</b> - Geräte-ID unter der der MatrixBot registriert ist</li>
-	  <li><b>event_id</b> - ID der letzten Nachricht</li>
-	  <li><b>filter_id</b> - ID des Filters, der Voraussetzung für eine Longpoll-Verbindung zum Server ist</li>
-	  <li><b>home_server</b> - Rückmeldung des Servers unter welchem Namen er erreichbar ist</li>
+	  <li><b>deviceId</b> - Geräte-ID unter der der MatrixBot registriert ist</li>
+	  <li><b>eventId</b> - ID der letzten Nachricht</li>
+	  <li><b>filterId</b> - ID des Filters, der Voraussetzung für eine Longpoll-Verbindung zum Server ist</li>
+	  <li><b>homeServer</b> - Rückmeldung des Servers unter welchem Namen er erreichbar ist</li>
 	  <li><b>logintypes</b> - unterstützte Login-Möglichkeiten des Servers. Zur Zeit ist "password" die einzige unterstützte Version</li>
 	  <li><b>message</b> - letzte empfangene Nachricht</li>
 	  <li><b>poll</b> - 0: kein Empfang, 1: Empfang eingeschaltet</li>
 	  <li><b>question_id</b> - ID der letzten Frage</li>
 	  <li><b>sender</b> - Sender der letzten Nachricht</li>
 	  <li><b>since</b> - Schlüssel vom Server bis zu welcher Nachricht der Empfang erfolgreich ist</li>
-	  <li><b>user_id</b> - Antwort des Servers welcher Account eingeloggt ist</li>
+	  <li><b>userId</b> - Antwort des Servers welcher Account eingeloggt ist</li>
 	</ul>
+</ul>
+
 =end html_DE
 =cut
