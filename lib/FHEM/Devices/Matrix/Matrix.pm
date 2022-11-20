@@ -18,7 +18,6 @@ use JSON;
 #use vars qw(%data);
 use FHEM::Core::Authentication::Passwords qw(:ALL);
 
-#    InternalTimer
 #    strftime
 #    RemoveInternalTimer
 #    readingFnAttributes
@@ -40,6 +39,7 @@ BEGIN {
     AttrVal
     ReadingsVal
     HttpUtils_NonblockingGet
+    InternalTimer
 	data
 	gettimeofday
 	fhem
@@ -50,7 +50,7 @@ my $Module_Version = '0.0.7';
 my $language = 'EN';
 
 sub Attr_List{
-	return "matrixRoom matrixSender matrixMessage matrixQuestion_ matrixQuestion_[0-9]+ matrixAnswer_ matrixAnswer_[0-9]+ $readingFnAttributes";
+	return "matrixLogin:password matrixRoom matrixSender matrixMessage matrixQuestion_ matrixQuestion_[0-9]+ matrixAnswer_ matrixAnswer_[0-9]+ $readingFnAttributes";
 }
 
 sub Define {
@@ -86,10 +86,24 @@ sub Undef {
 sub Startproc {
 	my ($hash) = @_;
 	my $name = $hash->{NAME};
-    Log3($name, 1, "$name: Startproc V".$hash->{ModuleVersion}." -> V".$Module_Version) if ($hash->{ModuleVersion}); 
 	# Update necessary?
+    Log3($name, 1, "$name: Start V".$hash->{ModuleVersion}." -> V".$Module_Version) if ($hash->{ModuleVersion}); 
 	$hash->{ModuleVersion} = $Module_Version;   
 	$language = AttrVal('global','language','EN');
+	$data{MATRIX}{"$name"}{"softfail"} = 1;
+	Log3($name, 4, "$name : Matrix::Startproc $hash");
+	Login($hash) if (ReadingsVal($name,'poll',0) == 1);
+}
+
+sub Login {
+	my $hash = @_;
+	Log3("nn", 4, "nn : Matrix::Login $hash");
+	if ($hash eq "1"){
+		Log3("nn", 4, "nn : Matrix::Login $hash");
+	} else {
+		Log3($hash->{NAME}, 4, "$hash->{NAME} : Matrix::Login $hash");
+		return PerformHttpRequest($hash, 'login', '');
+	}
 }
 
 ##########################
@@ -99,12 +113,12 @@ sub Notify($$)
 	my $name = $hash->{NAME};
 	my $devName = $dev->{NAME};
 	return "" if(IsDisabled($name));
-	#Log3($name, 1, "$name : X_Notify $devName");
 	my $events = deviceEvents($dev,1);
 	return if( !$events );
 
 	if(($devName eq "global") && grep(m/^INITIALIZED|REREADCFG$/, @{$events}))
 	{
+		Log3($name, 4, "$name : Matrix::Notify $hash");
 		Startproc($hash);
 	}
 	foreach my $event (@{$events}) {
@@ -164,7 +178,8 @@ sub Get {
 		return PerformHttpRequest($hash, $cmd, '');
 	}
 	elsif ($cmd eq "sync") {
-		$data{MATRIX}{"$name"}{"FAILS"} = 0;
+		$data{MATRIX}{"$name"}{"softfail"} = 0;
+		$data{MATRIX}{"$name"}{"hardfail"} = 0;
 		return PerformHttpRequest($hash, $cmd, '');
 	}
 	elsif ($cmd eq "filter") {
@@ -220,7 +235,7 @@ sub Set {
 
 sub Attr {
 	my ($cmd,$name,$attr_name,$attr_value) = @_;
-	Log3($name, 1, "Attr - $cmd - $name - $attr_name - $attr_value");
+	Log3($name, 4, "Attr - $cmd - $name - $attr_name - $attr_value");
 	if($cmd eq "set") {
 		if ($attr_name eq "matrixQuestion_") {
 			my @erg = split(/ /, $attr_value, 2);
@@ -241,19 +256,20 @@ sub Attr {
 
 sub Get_Message($$$) {
 	my($name, $def, $message) = @_;
-	Log3($name, 5, "$name - $def - $message");
+	Log3($name, 3, "$name - $def - $message");
 	my $q = AttrVal($name, "matrixQuestion_$def", "");
 	my $a = AttrVal($name, "matrixAnswer_$def", "");
 	my @questions = split(':',$q);
-	shift @questions;
+	shift @questions if ($def ne '99');
 	my @answers = split(':', $a);
-	Log3($name, 5, "$name - $q - $a");
+	Log3($name, 3, "$name - $q - $a");
 	my $pos = 0;
 	my ($question, $answer);
 	foreach $question (@questions){
+		Log3($name, 3, "$name - $question - $answers[$pos]");
 		$answer = $answers[$pos] if ($message eq $question);
 		if ($answer){
-			Log3($name, 5, "$name - $pos - $answer");
+			Log3($name, 3, "$name - $pos - $answer");
 			fhem($answer);
 			last;
 		}
@@ -267,11 +283,24 @@ sub PerformHttpRequest($$$)
 	my $now  = gettimeofday();
     my $name = $hash->{NAME};
 	my $passwd = "";
+	Log3($name, 4, "$name : Matrix::PerformHttpRequest $hash");
+
 	if ($def eq "login" || $def eq "reg2"){
 		$passwd = $hash->{helper}->{passwdobj}->getReadPassword($name) ;
 	}
-	#Log3($name, 5, "PerformHttpRequest - $name - $passwd");
+	$data{MATRIX}{"$name"}{"msgnumber"} = $data{MATRIX}{"$name"}{"msgnumber"} ? $data{MATRIX}{"$name"}{"msgnumber"} + 1 : 1;
+	my $msgnumber = $data{MATRIX}{"$name"}{"msgnumber"};
+	my $deviceId = ReadingsVal($name, 'deviceId', undef) ? ', "deviceId":"'.ReadingsVal($name, 'deviceId', undef).'"' : "";
 	
+    $data{MATRIX}{"$name"}{"busy"} = $data{MATRIX}{"$name"}{"busy"} ? $data{MATRIX}{"$name"}{"busy"} + 1 : 1;      # queue is busy until response is received
+	$data{MATRIX}{"$name"}{"sync"} = 0 if (!$data{MATRIX}{"$name"}{"sync"}); 
+
+	$data{MATRIX}{"$name"}{'LASTSEND'} = $now;                                # remember when last sent
+	if ($def eq "sync" && $data{MATRIX}{"$name"}{"next_refresh"} < $now && AttrVal($name,'matrixLogin','') eq 'password'){
+		$def = "refresh";
+		Log3($name, 5, qq($name $data{MATRIX}{"$name"}{"access_token"} sync2refresh - $data{MATRIX}{"$name"}{"next_refresh"} < $now) );
+		$data{MATRIX}{"$name"}{"next_refresh"} = $now + 300;
+	}
 	
     my $param = {
                     timeout    => 10,
@@ -280,17 +309,10 @@ sub PerformHttpRequest($$$)
 					value      => $value,                                     # sichern für eventuelle Wiederholung
                     method     => "POST",                                     # standard, sonst überschreiben
                     header     => "User-Agent: HttpUtils/2.2.3\r\nAccept: application/json",  # Den Header gemäß abzufragender Daten setzen
-                    callback   => \&ParseHttpResponse                         # Diese Funktion soll das Ergebnis dieser HTTP Anfrage bearbeiten
+                    callback   => \&ParseHttpResponse,                        # Diese Funktion soll das Ergebnis dieser HTTP Anfrage bearbeiten
+					msgnumber  => $msgnumber                                  # lfd. Nummer Request
                 };
-    $data{MATRIX}{"$name"}{"busy"} = $data{MATRIX}{"$name"}{"busy"} ? $data{MATRIX}{"$name"}{"busy"} + 1 : 1;      # queue is busy until response is received
-	$data{MATRIX}{"$name"}{'LASTSEND'} = $now;                                # remember when last sent
-	if ($def eq "sync" && $data{MATRIX}{"$name"}{"next_refresh"} < $now){
-		$def = "refresh";
-		Log3($name, 3, qq($name - sync2refresh - $data{MATRIX}{"$name"}{"next_refresh"} < $now) );
-		$data{MATRIX}{"$name"}{"next_refresh"} = $now + 300;
-	}
 	
-	my $deviceId = ReadingsVal($name, 'deviceId', undef) ? ', "deviceId":"'.ReadingsVal($name, 'deviceId', undef).'"' : "";
 	if ($def eq "logintypes"){
       $param->{'url'} =  $hash->{server}."/_matrix/client/r0/login";
 	  $param->{'method'} = 'GET';
@@ -308,13 +330,26 @@ sub PerformHttpRequest($$$)
       $param->{'data'} = '{"username":"'.$hash->{user}.'", "password":"'.$passwd.'", "auth": {"session":"'.$data{MATRIX}{"$name"}{"session"}.'","type":"m.login.dummy"}}';
 	}
 	if ($def eq "login"){
+	  if (AttrVal($name,'matrixLogin','') eq 'token'){
+		  $param->{'url'} =  $hash->{server}."/_matrix/client/v3/login";
+          $param->{'data'} = qq({"type":"m.login.token", "token":"$passwd", "user": "$hash->{user}", "txn_id": "z4567gerww", "session":"1234"});
+		  #$param->{'method'} = 'GET';
+	  } else {
+		  $param->{'url'} =  $hash->{server}."/_matrix/client/v3/login";
+          $param->{'data'} = '{"type":"m.login.password", "refresh_token": true, "identifier":{ "type":"m.id.user", "user":"'.$hash->{user}.'" }, "password":"'.$passwd.'"'.$deviceId.'}';
+	  }
+	}
+	if ($def eq "login2"){
       $param->{'url'} =  $hash->{server}."/_matrix/client/v3/login";
-      $param->{'data'} = '{"type":"m.login.password", "refresh_token": true, "identifier":{ "type":"m.id.user", "user":"'.$hash->{user}.'" }, "password":"'.$passwd.'"'
-	                     .$deviceId.'}';
+	  if (AttrVal($name,'matrixLogin','') eq 'token'){
+          $param->{'data'} = qq({"type":"m.login.token", "token":"$passwd", "user": "\@$hash->{user}:matrix.org", "txn_id": "z4567gerww"});
+          #$param->{'data'} = qq({"type":"m.login.token", "token":"$passwd"});
+	  }
 	}
 	if ($def eq "refresh"){              
       $param->{'url'} =  $hash->{server}.'/_matrix/client/v1/refresh'; 
       $param->{'data'} = '{"refresh_token": "'.$data{MATRIX}{"$name"}{"refresh_token"}.'"}';
+	  Log3($name, 5, qq($name $data{MATRIX}{"$name"}{"access_token"} refreshBeg $param->{'msgnumber'}: $data{MATRIX}{"$name"}{"next_refresh"} > $now) );
 	}
 	if ($def eq "wellknown"){
       $param->{'url'} =  $hash->{server}."/.well-known/matrix/client";
@@ -352,7 +387,6 @@ sub PerformHttpRequest($$$)
 	if ($def eq "questionEnd"){   
 	  $value = ReadingsVal($name, "questionId", "") if (!$value);
       $param->{'url'} =  $hash->{server}.'/_matrix/client/v3/rooms/'.AttrVal($name, 'matrixMessage', '!!').'/send/m.poll.end?access_token='.$data{MATRIX}{"$name"}{"access_token"};
-	  # ""'.ReadingsVal($name, 'questionEventId', '!!').'
       $param->{'data'} = '{"m.relates_to": {"rel_type": "m.reference","eventId": "'.$value.'"},"org.matrix.msc3381.poll.end": {},'.
                 '"org.matrix.msc1767.text": "Antort '.ReadingsVal($name, "answer", "").' erhalten von '.ReadingsVal($name, "sender", "").'"}';
 	}
@@ -368,6 +402,8 @@ sub PerformHttpRequest($$$)
 		$param->{'url'} =  $hash->{server}.'/_matrix/client/r0/sync?access_token='.$data{MATRIX}{"$name"}{"access_token"}.$since.$full_state.'&timeout=50000&filter='.ReadingsVal($name, 'filterId',0);
 		$param->{'method'} = 'GET';
 		$param->{'timeout'} = 60;
+		$data{MATRIX}{"$name"}{"sync"}++;
+		Log3($name, 5, qq($name $data{MATRIX}{"$name"}{"access_token"} syncBeg $param->{'msgnumber'}: $data{MATRIX}{"$name"}{"next_refresh"} > $now) );
 	}
 	if ($def eq "filter"){
       if ($value){ # get
@@ -388,9 +424,10 @@ sub PerformHttpRequest($$$)
         . ( $param->{data}   ? "\r\ndata: $param->{data}, "   : "" )
         . ( $param->{header} ? "\r\nheader: $param->{header}" : "" );
 	#readingsSingleUpdate($hash, "fullRequest", $test, 1);                                                        # Readings erzeugen
-	$test = "$name: Matrix sends with timeout $param->{timeout} to ".$test;
+	$test = "$name: Matrix sends with timeout $param->{timeout} to $test";
     Log3($name, 5, $test);
           
+	Log3($name, 3, qq($name $param->{'msgnumber'} $def Request Busy/Sync $data{MATRIX}{"$name"}{"busy"} / $data{MATRIX}{"$name"}{"sync"}) );
     HttpUtils_NonblockingGet($param);   #  Starten der HTTP Abfrage. Es gibt keinen Return-Code. 
 	return undef; 
 }
@@ -405,6 +442,7 @@ sub ParseHttpResponse($)
 	my $now  = gettimeofday();
 	my $nextRequest = "";
 
+	Log3($name, 3, qq($name $param->{'msgnumber'} $def Result $param->{code}) );
     readingsBeginUpdate($hash);
 	###readingsBulkUpdate($hash, "httpHeader", $param->{httpheader});
 	readingsBulkUpdate($hash, "httpStatus", $param->{code});
@@ -412,17 +450,21 @@ sub ParseHttpResponse($)
     if($err ne "") {                                                         # wenn ein Fehler bei der HTTP Abfrage aufgetreten ist
         Log3($name, 2, "error while requesting ".$param->{url}." - $err");   # Eintrag fürs Log
         readingsBulkUpdate($hash, "responseError", $err);                    # Reading erzeugen
-		$data{MATRIX}{"$name"}{"FAILS"} = 3;
+		$data{MATRIX}{"$name"}{"softfail"} = 3;
+		$data{MATRIX}{"$name"}{"hardfail"}++;
     }
     elsif($data ne "") {                                                     # wenn die Abfrage erfolgreich war ($data enthält die Ergebnisdaten des HTTP Aufrufes)
 		Log3($name, 4, $def." returned: $data");              # Eintrag fürs Log
 		my $decoded = eval { JSON::decode_json($data) };
 		Log3($name, 2, "$name: json error: $@ in data") if( $@ );
         if ($param->{code} == 200){
-			$data{MATRIX}{"$name"}{"FAILS"} = 0;
+			$data{MATRIX}{"$name"}{"softfail"} = 0;
+			$data{MATRIX}{"$name"}{"hardfail"} = 0;
 		} else {
-			$data{MATRIX}{"$name"}{"FAILS"}++;
-			readingsBulkUpdate($hash, "responseError", $data{MATRIX}{"$name"}{"FAILS"}.' - '.$data);        
+			$data{MATRIX}{"$name"}{"softfail"}++;
+			$data{MATRIX}{"$name"}{"hardfail"}++ if ($data{MATRIX}{"$name"}{"softfail"} > 3);
+			readingsBulkUpdate($hash, "responseError", qq(S$data{MATRIX}{$name}{'softfail'}: $data) );        
+    		Log3($name, 5, qq($name $data{MATRIX}{"$name"}{"access_token"} ${def}End $param->{'msgnumber'}: $data{MATRIX}{"$name"}{"next_refresh"} > $now) );
 		}
         # readingsBulkUpdate($hash, "fullResponse", $data); 
 		
@@ -449,25 +491,30 @@ sub ParseHttpResponse($)
 			$data{MATRIX}{"$name"}{"session"} = $decoded->{'session'};
 			$nextRequest = "";#"reg2";
 		}
+		$data{MATRIX}{"$name"}{"session"} = $decoded->{'session'} if ($decoded->{'session'});
+		readingsBulkUpdate($hash, "session", $decoded->{'session'}) if ($decoded->{'session'});
+
 		if ($def eq  "reg2" || $def eq  "login" || $def eq "refresh") {
 			readingsBulkUpdate($hash, "lastRegister", $param->{code}) if $def eq  "reg2";
 			readingsBulkUpdate($hash, "lastLogin",  $param->{code}) if $def eq  "login";
 			readingsBulkUpdate($hash, "lastRefresh", $param->{code}) if $def eq  "refresh";
 			if ($param->{code} == 200){
-				readingsBulkUpdate($hash, "userId", $decoded->{'userId'}) if ($decoded->{'userId'});
+				readingsBulkUpdate($hash, "userId", $decoded->{'user_id'}) if ($decoded->{'user_id'});
 				readingsBulkUpdate($hash, "homeServer", $decoded->{'homeServer'}) if ($decoded->{'homeServer'});
-				readingsBulkUpdate($hash, "deviceId", $decoded->{'deviceId'}) if ($decoded->{'deviceId'});
+				readingsBulkUpdate($hash, "deviceId", $decoded->{'device_id'}) if ($decoded->{'device_id'});
 				
 				$data{MATRIX}{"$name"}{"expires"} = $decoded->{'expires_in_ms'} if ($decoded->{'expires_in_ms'});
 				$data{MATRIX}{"$name"}{"refresh_token"} = $decoded->{'refresh_token'} if ($decoded->{'refresh_token'}); 
 				$data{MATRIX}{"$name"}{"access_token"} =  $decoded->{'access_token'} if ($decoded->{'access_token'});
 				$data{MATRIX}{"$name"}{"next_refresh"} = $now + $data{MATRIX}{"$name"}{"expires"}/1000 - 60; # refresh one minute before end
 			}
+    		Log3($name, 5, qq($name $data{MATRIX}{"$name"}{"access_token"} refreshEnd $param->{'msgnumber'}: $data{MATRIX}{"$name"}{"next_refresh"} > $now) );
 		}
         if ($def eq "wellknown"){
 			# https://spec.matrix.org/unstable/client-server-api/
 		}
         if ($param->{code} == 200 && $def eq "sync"){
+    		Log3($name, 5, qq($name $data{MATRIX}{"$name"}{"access_token"} syncEnd $param->{'msgnumber'}: $data{MATRIX}{"$name"}{"next_refresh"} > $now) );
 			readingsBulkUpdate($hash, "since", $decoded->{'next_batch'}) if ($decoded->{'next_batch'});
 			# roomlist
 			my $list = $decoded->{'rooms'}->{'join'};
@@ -506,6 +553,11 @@ sub ParseHttpResponse($)
 						} elsif ($tl->{'type'} eq "org.matrix.msc3381.poll.response"){
 							my $sender = $tl->{'sender'};
 							my $message = $tl->{'content'}->{'org.matrix.msc3381.poll.response'}->{'answers'}[0];
+							if ($tl->{'content'}->{'m.relates_to'}){
+								if ($tl->{'content'}->{'m.relates_to'}->{'rel_type'} eq 'm.reference'){
+									readingsBulkUpdate($hash, "questionId", $tl->{'content'}->{'m.relates_to'}->{'event_id'})
+								}
+							}
 							if (AttrVal($name, 'matrixSender', '') =~ $sender){
 								readingsBulkUpdate($hash, "message", $message); 
 								readingsBulkUpdate($hash, "sender", $sender); 
@@ -530,31 +582,30 @@ sub ParseHttpResponse($)
 			readingsBulkUpdate($hash, "logintypes", $types);
 		}
         if ($def eq "filter"){
-			readingsBulkUpdate($hash, "filterId", $decoded->{'filterId'}) if ($decoded->{'filterId'});
+			readingsBulkUpdate($hash, "filterId", $decoded->{'filter_id'}) if ($decoded->{'filter_id'});
 		}
         if ($def eq "msg" ){
-			readingsBulkUpdate($hash, "eventId", $decoded->{'eventId'}) if ($decoded->{'eventId'});
+			readingsBulkUpdate($hash, "eventId", $decoded->{'event_id'}) if ($decoded->{'event_id'});
 			#m.relates_to
 		}
         if ($def eq "question"){
-			readingsBulkUpdate($hash, "questionId", $decoded->{'eventId'}) if ($decoded->{'eventId'});
+			readingsBulkUpdate($hash, "questionId", $decoded->{'event_id'}) if ($decoded->{'event_id'});
 			#m.relates_to
 		}
         if ($def eq "questionEnd"){
-			readingsBulkUpdate($hash, "eventId", $decoded->{'eventId'}) if ($decoded->{'eventId'});
-			readingsBulkUpdate($hash, "questionId", "") if ($decoded->{'eventId'});
+			readingsBulkUpdate($hash, "eventId", $decoded->{'event_id'}) if ($decoded->{'event_id'});
+			readingsBulkUpdate($hash, "questionId", "") if ($decoded->{'event_id'});
 			#m.relates_to
 		}
 	}
     readingsEndUpdate($hash, 1);
-    $data{MATRIX}{"$name"}{"busy"} = $data{MATRIX}{"$name"}{"busy"} - 1;      # queue is busy until response is received
-	$data{MATRIX}{"$name"}{"sync"} = 0 if ($def eq "sync" || !$data{MATRIX}{"$name"}{"sync"});                   # possible next sync
-	$nextRequest = "" if ($nextRequest eq "sync" && $data{MATRIX}{"$name"}{"sync"} == 1); # only one sync at a time!
+    $data{MATRIX}{"$name"}{"busy"}--; # = $data{MATRIX}{"$name"}{"busy"} - 1;      # queue is busy until response is received
+	$data{MATRIX}{"$name"}{"sync"}-- if ($def eq "sync");                   # possible next sync
+	$nextRequest = "" if ($nextRequest eq "sync" && $data{MATRIX}{"$name"}{"sync"} > 0); # only one sync at a time!
 	
-    #if ($def eq "sync" && $nextRequest eq "sync" && ReadingsVal($name,'poll',0) == 1 && $data{MATRIX}{"$name"}{"FAILS"} < 3){
-	#	PerformHttpRequest($hash, $nextRequest, '');
-	#} els
-	if ($nextRequest ne "" && ReadingsVal($name,'poll',0) == 1 && $data{MATRIX}{"$name"}{"FAILS"} < 3) {
+	# PerformHttpRequest or InternalTimer if FAIL >= 3
+	Log3($name, 4, "$name : Matrix::ParseHttpResponse $hash");
+	if ($nextRequest ne "" && ReadingsVal($name,'poll',0) == 1 && $data{MATRIX}{"$name"}{"softfail"} < 3) {
 		if ($nextRequest eq "sync" && $data{MATRIX}{"$name"}{"repeat"}){
 			$def = $data{MATRIX}{"$name"}{"repeat"}->{"def"};
 			$value = $data{MATRIX}{"$name"}{"repeat"}->{"value"};
@@ -563,6 +614,26 @@ sub ParseHttpResponse($)
 		} else {
 			PerformHttpRequest($hash, $nextRequest, '');
 		}
+	} else {
+		my $pauseLogin;
+		if ($data{MATRIX}{"$name"}{"hardfail"} >= 3){
+			$pauseLogin = 300;
+		} elsif ($data{MATRIX}{"$name"}{"softfail"} >= 3){
+			$pauseLogin = 30;
+		} elsif ($data{MATRIX}{"$name"}{"softfail"} > 0){
+			$pauseLogin = 10;
+		} else {
+			$pauseLogin = 0;
+		}
+		if ($pauseLogin > 0){
+			my $timeToStart = gettimeofday() + $pauseLogin;
+			RemoveInternalTimer($hash->{myTimer}) if($hash->{myTimer});
+			$hash->{myTimer} = { hash=>$hash };
+			InternalTimer($timeToStart, \&FHEM::Devices::Matrix::Login, $hash->{myTimer});
+		} else {
+			Login($hash);
+		}
 	}
+		
     # Damit ist die Abfrage zuende.
 }
