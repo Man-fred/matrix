@@ -1,3 +1,6 @@
+2022-11-22 - autologin when matrixPoll=1
+
+poll changed from set to attr matrixPoll
 2022-11-12 - unix-like LF and infos from developer-wiki
 2022-11-09 - logintypes from server, readings in commandref
 2022-11-06 - package, commandref and internationalization
