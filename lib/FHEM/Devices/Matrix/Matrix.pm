@@ -46,11 +46,11 @@ BEGIN {
   ))
 };
 
-my $Module_Version = '0.0.7';
+my $Module_Version = '0.0.8';
 my $language = 'EN';
 
 sub Attr_List{
-	return "matrixLogin:password matrixRoom matrixSender matrixMessage matrixQuestion_ matrixQuestion_[0-9]+ matrixAnswer_ matrixAnswer_[0-9]+ $readingFnAttributes";
+	return "matrixLogin:password matrixRoom matrixPoll:0,1 matrixSender matrixMessage matrixQuestion_ matrixQuestion_[0-9]+ matrixAnswer_ matrixAnswer_[0-9]+ $readingFnAttributes";
 }
 
 sub Define {
@@ -86,24 +86,19 @@ sub Undef {
 sub Startproc {
 	my ($hash) = @_;
 	my $name = $hash->{NAME};
+	Log3($name, 4, "$name : Matrix::Startproc $hash ".AttrVal($name,'matrixPoll','-1'));
 	# Update necessary?
     Log3($name, 1, "$name: Start V".$hash->{ModuleVersion}." -> V".$Module_Version) if ($hash->{ModuleVersion}); 
 	$hash->{ModuleVersion} = $Module_Version;   
 	$language = AttrVal('global','language','EN');
 	$data{MATRIX}{"$name"}{"softfail"} = 1;
-	Log3($name, 4, "$name : Matrix::Startproc $hash");
-	Login($hash) if (ReadingsVal($name,'poll',0) == 1);
+	Login($hash) if (AttrVal($name,'matrixPoll',0) == 1);
 }
 
 sub Login {
-	my $hash = @_;
-	Log3("nn", 4, "nn : Matrix::Login $hash");
-	if ($hash eq "1"){
-		Log3("nn", 4, "nn : Matrix::Login $hash");
-	} else {
-		Log3($hash->{NAME}, 4, "$hash->{NAME} : Matrix::Login $hash");
-		return PerformHttpRequest($hash, 'login', '');
-	}
+	my ($hash) = @_;
+	Log3($hash->{NAME}, 4, "$hash->{NAME} : Matrix::Login $hash");
+	return PerformHttpRequest($hash, 'login', '');
 }
 
 ##########################
@@ -124,7 +119,7 @@ sub Notify($$)
 	foreach my $event (@{$events}) {
 		$event = "" if(!defined($event));
 		### Writing log entry
-		Log3($name, 4, "$name : X_Notify $devName - $event");
+		Log3($name, 4, "$name : Matrix::Notify $devName - $event");
 		$language = AttrVal('global','language','EN') if ($event =~ /ATTR global language.*/);
 		# Examples:
 		# $event = "ATTR global language DE"
@@ -200,7 +195,7 @@ sub Set {
 	if ($cmd eq "msg") {
 		return PerformHttpRequest($hash, $cmd, $value);
 	}
-	elsif ($cmd eq "poll" || $cmd eq "pollFullstate") {
+	elsif ($cmd eq "pollFullstate") {
 		readingsSingleUpdate($hash, $cmd, $value, 1);                                                        # Readings erzeugen
 	}
 	elsif ($cmd eq "password") {
@@ -226,7 +221,7 @@ sub Set {
 		return PerformHttpRequest($hash, $cmd, '');
 	}
     else {		
-		return "Unknown argument $cmd, choose one of filter:noArg password question questionEnd poll:0,1 pollFullstate:0,1 msg register login:noArg refresh:noArg";
+		return "Unknown argument $cmd, choose one of filter:noArg password question questionEnd pollFullstate:0,1 msg register login:noArg refresh:noArg";
 	}
     
 	#return "$opt set to $value. Try to get it.";
@@ -605,35 +600,36 @@ sub ParseHttpResponse($)
 	
 	# PerformHttpRequest or InternalTimer if FAIL >= 3
 	Log3($name, 4, "$name : Matrix::ParseHttpResponse $hash");
-	if ($nextRequest ne "" && ReadingsVal($name,'poll',0) == 1 && $data{MATRIX}{"$name"}{"softfail"} < 3) {
-		if ($nextRequest eq "sync" && $data{MATRIX}{"$name"}{"repeat"}){
-			$def = $data{MATRIX}{"$name"}{"repeat"}->{"def"};
-			$value = $data{MATRIX}{"$name"}{"repeat"}->{"value"};
-			$data{MATRIX}{"$name"}{"repeat"} = undef;
-			PerformHttpRequest($hash, $def, $value);
+	if (AttrVal($name,'matrixPoll',0) == 1){
+		if ($nextRequest ne "" && $data{MATRIX}{"$name"}{"softfail"} < 3) {
+			if ($nextRequest eq "sync" && $data{MATRIX}{"$name"}{"repeat"}){
+				$def = $data{MATRIX}{"$name"}{"repeat"}->{"def"};
+				$value = $data{MATRIX}{"$name"}{"repeat"}->{"value"};
+				$data{MATRIX}{"$name"}{"repeat"} = undef;
+				PerformHttpRequest($hash, $def, $value);
+			} else {
+				PerformHttpRequest($hash, $nextRequest, '');
+			}
 		} else {
-			PerformHttpRequest($hash, $nextRequest, '');
-		}
-	} else {
-		my $pauseLogin;
-		if ($data{MATRIX}{"$name"}{"hardfail"} >= 3){
-			$pauseLogin = 300;
-		} elsif ($data{MATRIX}{"$name"}{"softfail"} >= 3){
-			$pauseLogin = 30;
-		} elsif ($data{MATRIX}{"$name"}{"softfail"} > 0){
-			$pauseLogin = 10;
-		} else {
-			$pauseLogin = 0;
-		}
-		if ($pauseLogin > 0){
-			my $timeToStart = gettimeofday() + $pauseLogin;
-			RemoveInternalTimer($hash->{myTimer}) if($hash->{myTimer});
-			$hash->{myTimer} = { hash=>$hash };
-			InternalTimer($timeToStart, \&FHEM::Devices::Matrix::Login, $hash->{myTimer});
-		} else {
-			Login($hash);
+			my $pauseLogin;
+			if ($data{MATRIX}{"$name"}{"hardfail"} >= 3){
+				$pauseLogin = 300;
+			} elsif ($data{MATRIX}{"$name"}{"softfail"} >= 3){
+				$pauseLogin = 30;
+			} elsif ($data{MATRIX}{"$name"}{"softfail"} > 0){
+				$pauseLogin = 10;
+			} else {
+				$pauseLogin = 0;
+			}
+			if ($pauseLogin > 0){
+				my $timeToStart = gettimeofday() + $pauseLogin;
+				RemoveInternalTimer($hash->{myTimer}) if($hash->{myTimer});
+				$hash->{myTimer} = { hash=>$hash };
+				InternalTimer($timeToStart, \&FHEM::Devices::Matrix::Login, $hash->{myTimer});
+			} else {
+				Login($hash);
+			}
 		}
 	}
-		
     # Damit ist die Abfrage zuende.
 }
