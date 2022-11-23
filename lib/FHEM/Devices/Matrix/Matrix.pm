@@ -18,6 +18,8 @@ use JSON;
 #use vars qw(%data);
 use FHEM::Core::Authentication::Passwords qw(:ALL);
 
+use experimental qw /switch/;		#(CoolTux) - als Ersatz für endlos lange elsif Abfragen
+
 #    strftime
 #    RemoveInternalTimer
 #    readingFnAttributes
@@ -54,7 +56,10 @@ sub Attr_List{
 }
 
 sub Define {
-    my ($hash, $def) = @_;
+	#(CoolTux) bei einfachen übergaben nimmt man die Daten mit shift auf
+    my $hash	= shift;
+	my $def 	= shift;
+
     my @param = split('[ \t]+', $def);
 	my $name = $param[0]; #$param[0];
 	
@@ -63,6 +68,7 @@ sub Define {
     if(int(@param) < 1) {
         return "too few parameters: define <name> Matrix <server> <user>";
     }
+
     $hash->{name}  = $param[0];
     $hash->{server} = $param[2];
     $hash->{user} = $param[3];
@@ -70,52 +76,87 @@ sub Define {
     $hash->{helper}->{passwdobj} = FHEM::Core::Authentication::Passwords->new($hash->{TYPE});
 	#$hash->{helper}->{i18} = Get_I18n();
 	$hash->{NOTIFYDEV} = "global";
-	Startproc($hash) if($init_done);
+
+	Startproc($hash) if($init_done);		#(CoolTux) Wie startet Startproc() wenn $init_done 0 ist. Dann bleibt das Modul stehen und macht nichts mehr
+											#  es empfiehlt sich hier in der NotifyFn das globale Event INITIALIZED abzufangen.
+											#  Ok gerade gesehen hast Du gemacht!!!
+
     return ;
 }
 
 sub Undef {
-    my ($hash, $arg) = @_; 
+    my $hash	= shift;
+	my $arg		= shift;
+
     my $name = $hash->{NAME};
     # undef $data
-	$data{MATRIX}{"$name"} = undef;
-    $hash->{helper}->{passwdobj}->setDeletePassword($name);
+	$data{MATRIX}{"$name"} = undef;					#(CoolTux) Bin mir gerade nicht sicher woher das $data kommt
+														#  meinst Du das %data aus main? Das ist für User. Wenn Du als Modulentwickler
+														#  etwas zwischenspeichern möchtest dann in $hash->{helper}
+
+    $hash->{helper}->{passwdobj}->setDeletePassword($name);			#(CoolTux) das ist nicht nötig, 
+																	#  du löschst jedesmal den Eintrag wenn FHEM beendet wird.
+																	#  Es sollte eine DeleteFn geben da kannst Du das rein machen
+
     return ;
 }
 
 sub Startproc {
-	my ($hash) = @_;
+	my $hash = shift;
+
 	my $name = $hash->{NAME};
+
 	Log3($name, 4, "$name : Matrix::Startproc $hash ".AttrVal($name,'matrixPoll','-1'));
 	# Update necessary?
-    Log3($name, 1, "$name: Start V".$hash->{ModuleVersion}." -> V".$Module_Version) if ($hash->{ModuleVersion}); 
+    Log3($name, 1, "$name: Start V".$hash->{ModuleVersion}." -> V".$Module_Version) if ($hash->{ModuleVersion});
+
 	$hash->{ModuleVersion} = $Module_Version;   
 	$language = AttrVal('global','language','EN');
 	$data{MATRIX}{"$name"}{"softfail"} = 1;
+
 	Login($hash) if (AttrVal($name,'matrixPoll',0) == 1);
+
+	return;
 }
 
 sub Login {
-	my ($hash) = @_;
+	my $hash = shift;
+
 	Log3($hash->{NAME}, 4, "$hash->{NAME} : Matrix::Login $hash");
+
 	return PerformHttpRequest($hash, 'login', '');
 }
 
 ##########################
-sub Notify($$)
+# sub Notify($$)				
+				#(CoolTux) Subroutine prototypes used. See page 194 of PBP (Subroutines::ProhibitSubroutinePrototypes)
+				# Contrary to common belief, subroutine prototypes do not enable
+				# compile-time checks for proper arguments. Don't use them.
+sub Notify
 {
-	my ($hash, $dev) = @_;
+	my $hash	= shift;
+	my $dev		= shift;
+
 	my $name = $hash->{NAME};
 	my $devName = $dev->{NAME};
+
 	return "" if(IsDisabled($name));
+
 	my $events = deviceEvents($dev,1);
+
 	return if( !$events );
 
-	if(($devName eq "global") && grep(m/^INITIALIZED|REREADCFG$/, @{$events}))
+	#if(($devName eq "global") && grep(m/^INITIALIZED|REREADCFG$/, @{$events}))
+	  #(CoolTux) unnötige Klammern, und vielleicht bisschen übersichtlicher versuchen :-)
+	if ( $devName eq "global"
+	  && grep(m/^INITIALIZED|REREADCFG$/, @{$events}))
 	{
 		Log3($name, 4, "$name : Matrix::Notify $hash");
 		Startproc($hash);
 	}
+
+
+		#(CoolTux) bin mir nicht sicher wieso die Schleife. Nötig ist sie aber egal wofür gedacht nicht.
 	foreach my $event (@{$events}) {
 		$event = "" if(!defined($event));
 		### Writing log entry
@@ -129,25 +170,41 @@ sub Notify($$)
 		#
 		# processing $event with further code
 	}
-	return undef;
+
+	return;		#(CoolTux) es reicht nur return. Wichtig jede sub muss immer mit return enden
 }
 
 #############################################################################################
 # called when the device gets renamed, copy from telegramBot
 # in this case we then also need to rename the key in the token store and ensure it is recoded with new name
-sub Rename($$) {
-    my ($new,$old) = @_;
+sub Rename {
+    my $new	= shift;
+	my $old = shift;
+
 	my $hash    = $defs{$new};
 
 	$data{MATRIX}{"$new"} = $data{MATRIX}{"$old"};
-	$data{MATRIX}{"$old"} = undef;
-    $hash->{helper}->{passwdobj}->setRename($new,$old);
+	#$data{MATRIX}{"$old"} = undef;		(CoolTux) Wenn ein Hash nicht mehr benötigt wird dann delete
+	delete $data{MATRIX}{"$old"}
+
+	my ($passResp,$passErr);
+    ($passResp,$passErr) = $hash->{helper}->{passwdobj}->setRename($new,$old);		#(CoolTux) Es empfiehlt sich ab zu fragen ob der Wechsel geklappt hat
+
+	Log3($name, 1, "$name : Matrix::Rename - error while change the password hash after rename - $passErr")
+        if ( !defined($passResp)
+    	  && defined($passErr) );
+
+	Log3($name, 1, "$name : Matrix::Rename - change password hash after rename successfully")
+        if ( defined($passResp)
+          && !defined($passErr) );
 	
     #my $nhash = $defs{$new};
+	return;
 }
 
 sub I18N {
 	my $value = shift;
+
 	my $def = { 
 		'EN' => {
 			'require2' => 'requires 2 arguments'
@@ -166,22 +223,32 @@ sub Get {
 	my $value = join(" ", @args);
 	#$cmd = '?' if (!$cmd);
 
-	if ($cmd eq "wellknown") {
-		return PerformHttpRequest($hash, $cmd, '');
+	#(CoolTux) Eine endlos Lange elsif Schlange ist nicht zu empfehlen, besser mit switch arbeiten
+	#  Im Modulkopf use experimental qw /switch/; verwenden
+	given ($cmd) {
+		when ('wellknown') {
+			return PerformHttpRequest($hash, $cmd, '');
+		}
+
+		when ('logintypes') {
+			return PerformHttpRequest($hash, $cmd, '');
+		}
+
+		when ('sync') {
+			$data{MATRIX}{"$name"}{"softfail"} = 0;		#(CoolTux) Bin mir gerade nicht sicher woher das $data kommt
+														#  meinst Du das %data aus main? Das ist für User. Wenn Du als Modulentwickler
+														#  etwas zwischenspeichern möchtest dann in $hash->{helper} 
+			$data{MATRIX}{"$name"}{"hardfail"} = 0;
+			return PerformHttpRequest($hash, $cmd, '');
+		}
+
+		when ('filter') {
+			return qq("get Matrix $cmd" needs a filterId to request);
+			return PerformHttpRequest($hash, $cmd, $value);
+		}
+
+		default { return "Unknown argument $cmd, choose one of logintypes filter sync wellknown"; }
 	}
-	elsif ($cmd eq "logintypes") {
-		return PerformHttpRequest($hash, $cmd, '');
-	}
-	elsif ($cmd eq "sync") {
-		$data{MATRIX}{"$name"}{"softfail"} = 0;
-		$data{MATRIX}{"$name"}{"hardfail"} = 0;
-		return PerformHttpRequest($hash, $cmd, '');
-	}
-	elsif ($cmd eq "filter") {
-	    return qq("get Matrix $cmd" needs a filterId to request);
-		return PerformHttpRequest($hash, $cmd, $value);
-	}
-	return "Unknown argument $cmd, choose one of logintypes filter sync wellknown";
 }
 
 sub Set {
@@ -191,50 +258,90 @@ sub Set {
 	
 	#Log3($name, 5, "Set $hash->{NAME}: $name - $cmd - $value");
 	#return "set $name needs at least one argument" if (int(@$param) < 3);
+
+	#(CoolTux) Eine endlos Lange elsif Schlange ist nicht zu empfehlen, besser mit switch arbeiten
+	#  Im Modulkopf use experimental qw /switch/; verwenden
 	
-	if ($cmd eq "msg") {
-		return PerformHttpRequest($hash, $cmd, $value);
-	}
-	elsif ($cmd eq "pollFullstate") {
-		readingsSingleUpdate($hash, $cmd, $value, 1);                                                        # Readings erzeugen
-	}
-	elsif ($cmd eq "password") {
-		my ($erg,$err) = $hash->{helper}->{passwdobj}->setStorePassword($name,$value);
-		return undef;
-	}
-	elsif ($cmd eq "filter") {
-		return PerformHttpRequest($hash, $cmd, '');
-	}
-	elsif ($cmd eq "question") {
-		return PerformHttpRequest($hash, $cmd, $value);
-	}
-	elsif ($cmd eq "questionEnd") {
-		return PerformHttpRequest($hash, $cmd, $value);
-	}
-	elsif ($cmd eq "register") {
-		return PerformHttpRequest($hash, $cmd, ''); # 2 steps (ToDo: 3 steps empty -> dummy -> registration_token o.a.)
-	}
-	elsif ($cmd eq "login") {
-		return PerformHttpRequest($hash, $cmd, '');
-	}
-	elsif ($cmd eq "refresh") {
-		return PerformHttpRequest($hash, $cmd, '');
-	}
-    else {		
-		return "Unknown argument $cmd, choose one of filter:noArg password question questionEnd pollFullstate:0,1 msg register login:noArg refresh:noArg";
+	# if ($cmd eq "msg") {
+	# 	return PerformHttpRequest($hash, $cmd, $value);
+	# }
+	# elsif ($cmd eq "pollFullstate") {
+	# 	readingsSingleUpdate($hash, $cmd, $value, 1);                                                        # Readings erzeugen
+	# }
+	# elsif ($cmd eq "password") {
+	# 	my ($erg,$err) = $hash->{helper}->{passwdobj}->setStorePassword($name,$value);
+	# 	return undef;
+	# }
+	# elsif ($cmd eq "filter") {
+	# 	return PerformHttpRequest($hash, $cmd, '');
+	# }
+	# elsif ($cmd eq "question") {
+	# 	return PerformHttpRequest($hash, $cmd, $value);
+	# }
+	# elsif ($cmd eq "questionEnd") {
+	# 	return PerformHttpRequest($hash, $cmd, $value);
+	# }
+	# elsif ($cmd eq "register") {
+	# 	return PerformHttpRequest($hash, $cmd, ''); # 2 steps (ToDo: 3 steps empty -> dummy -> registration_token o.a.)
+	# }
+	# elsif ($cmd eq "login") {
+	# 	return PerformHttpRequest($hash, $cmd, '');
+	# }
+	# elsif ($cmd eq "refresh") {
+	# 	return PerformHttpRequest($hash, $cmd, '');
+	# }
+    # else {		
+	# 	return "Unknown argument $cmd, choose one of filter:noArg password question questionEnd pollFullstate:0,1 msg register login:noArg refresh:noArg";
+	# }
+
+	given ($cmd) {
+		when ('msg') {
+			return PerformHttpRequest($hash, $cmd, $value);
+		}
+		when ('pollFullstate') {
+			readingsSingleUpdate($hash, $cmd, $value, 1);                                                        # Readings erzeugen
+		}
+		when ('password') {
+			my ($erg,$err) = $hash->{helper}->{passwdobj}->setStorePassword($name,$value);
+			return;
+		}
+		when ('filter') {
+			return PerformHttpRequest($hash, $cmd, '');
+		}
+		when ('question') {
+			return PerformHttpRequest($hash, $cmd, $value);
+		}
+		when ('questionEnd') {
+			return PerformHttpRequest($hash, $cmd, $value);
+		}
+		when ('register') {
+			return PerformHttpRequest($hash, $cmd, ''); # 2 steps (ToDo: 3 steps empty -> dummy -> registration_token o.a.)
+		}
+		when ('login') {
+			return PerformHttpRequest($hash, $cmd, '');
+		}
+		when ('refresh') {
+			return PerformHttpRequest($hash, $cmd, '');
+		}
+
+		default {		
+			return "Unknown argument $cmd, choose one of filter:noArg password question questionEnd pollFullstate:0,1 msg register login:noArg refresh:noArg";
+		}
 	}
     
-	#return "$opt set to $value. Try to get it.";
+	return;
 }
 
 
 sub Attr {
 	my ($cmd,$name,$attr_name,$attr_value) = @_;
+
 	Log3($name, 4, "Attr - $cmd - $name - $attr_name - $attr_value");
+
 	if($cmd eq "set") {
 		if ($attr_name eq "matrixQuestion_") {
 			my @erg = split(/ /, $attr_value, 2);
-			#$_[2] = "matrixQuestion_n";
+			$_[2] = "matrixQuestion_n";
 			return qq("attr $name $attr_name" ).I18N('require2') if (!$erg[1] || $erg[0] !~ /[0-9]/);
 			$_[2] = "matrixQuestion_$erg[0]";
 			$_[3] = $erg[1];
@@ -246,11 +353,15 @@ sub Attr {
 			$_[3] = $erg[1];
 		}
 	}
+
 	return ;
 }
 
-sub Get_Message($$$) {
-	my($name, $def, $message) = @_;
+sub Get_Message {
+	my $name	= shift;
+	my $def		= shift;
+	my $message	= shift;
+	
 	Log3($name, 3, "$name - $def - $message");
 	my $q = AttrVal($name, "matrixQuestion_$def", "");
 	my $a = AttrVal($name, "matrixAnswer_$def", "");
@@ -259,8 +370,16 @@ sub Get_Message($$$) {
 	my @answers = split(':', $a);
 	Log3($name, 3, "$name - $q - $a");
 	my $pos = 0;
-	my ($question, $answer);
-	foreach $question (@questions){
+	#my ($question, $answer);
+	my $answer;
+
+	# foreach my $question (@questions){
+	foreach my $question (@questions){				#(CoolTux) - Loop iterator is not lexical. See page 108 of PBP (Variables::RequireLexicalLoopIterators)perlcritic
+												#  This policy asks you to use `my'-style lexical loop iterator variables:
+
+												# foreach my $zed (...) {
+												# ...
+												# }
 		Log3($name, 3, "$name - $question - $answers[$pos]");
 		$answer = $answers[$pos] if ($message eq $question);
 		if ($answer){
@@ -270,11 +389,18 @@ sub Get_Message($$$) {
 		}
 		$pos++;
 	}
+
+	return;
 }
 
-sub PerformHttpRequest($$$)
+sub PerformHttpRequest
 {
-    my ($hash, $def, $value) = @_;
+			#(CoolTux) hier solltest Du überlegen das Du die einzelnen Anweisung nach der Bedingung in einzelne Funktionen auslagerst
+			# Subroutine "PerformHttpRequest" with high complexity score
+    my $hash	= shift;
+	my $def		= shift;
+	my $value	= shift;
+
 	my $now  = gettimeofday();
     my $name = $hash->{NAME};
 	my $passwd = "";
@@ -424,12 +550,21 @@ sub PerformHttpRequest($$$)
           
 	Log3($name, 3, qq($name $param->{'msgnumber'} $def Request Busy/Sync $data{MATRIX}{"$name"}{"busy"} / $data{MATRIX}{"$name"}{"sync"}) );
     HttpUtils_NonblockingGet($param);   #  Starten der HTTP Abfrage. Es gibt keinen Return-Code. 
-	return undef; 
+
+	return; 
 }
 
-sub ParseHttpResponse($)
+sub ParseHttpResponse
 {
-    my ($param, $err, $data) = @_;
+
+			#(CoolTux) hier solltest Du überlegen das Du die einzelnen Anweisung nach der Bedingung in einzelne Funktionen auslagerst
+			# Subroutine "PerformHttpRequest" with high complexity score
+
+    my $param	= shift;
+	my $err		= shift;
+	my $data	= shift;
+
+
     my $hash = $param->{hash};
 	my $def = $param->{def};
 	my $value = $param->{value};
@@ -593,6 +728,7 @@ sub ParseHttpResponse($)
 			#m.relates_to
 		}
 	}
+
     readingsEndUpdate($hash, 1);
     $data{MATRIX}{"$name"}{"busy"}--; # = $data{MATRIX}{"$name"}{"busy"} - 1;      # queue is busy until response is received
 	$data{MATRIX}{"$name"}{"sync"}-- if ($def eq "sync");                   # possible next sync
@@ -632,4 +768,11 @@ sub ParseHttpResponse($)
 		}
 	}
     # Damit ist die Abfrage zuende.
+
+	return;
 }
+
+
+1;		#(CoolTux) ein Modul endet immer mit 1;
+
+__END__		#(CoolTux) Markiert im File das Ende des Programms. Danach darf beliebiger Text stehen. Dieser wird vom Perlinterpreter nicht berücksichtigt.
