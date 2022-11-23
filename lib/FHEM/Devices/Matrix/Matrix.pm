@@ -9,7 +9,11 @@
 #                                   b) die Bezeichnungen der Readings, 
 #                                   c) die Bezeichnungen der Attribute.
 
-package FHEM::Devices::Matrix;
+#package FHEM::Devices::Matrix;
+#(Man-Fred) geh ich Recht in der Annahme, dass hier das gleiche package hin gehört
+#           wie im Modul 98_Matrix?
+package FHEM::Matrix;
+
 use strict;
 use warnings;
 use HttpUtils;
@@ -157,6 +161,8 @@ sub Notify
 
 
 		#(CoolTux) bin mir nicht sicher wieso die Schleife. Nötig ist sie aber egal wofür gedacht nicht.
+		#(Man-Fred) die Schleife ist vom Debugging, ich wollte wissen was im Notify ankommt.
+		#           kann raus in einer späteren Version
 	foreach my $event (@{$events}) {
 		$event = "" if(!defined($event));
 		### Writing log entry
@@ -181,13 +187,18 @@ sub Rename {
     my $new	= shift;
 	my $old = shift;
 
-	my $hash    = $defs{$new};
-
-	$data{MATRIX}{"$new"} = $data{MATRIX}{"$old"};
-	#$data{MATRIX}{"$old"} = undef;		(CoolTux) Wenn ein Hash nicht mehr benötigt wird dann delete
-	delete $data{MATRIX}{"$old"}
+	my $hash = $defs{$new};
+    my $name = $hash->{NAME};
 
 	my ($passResp,$passErr);
+
+	$data{MATRIX}{"$new"} = $data{MATRIX}{"$old"};
+	
+	$data{MATRIX}{"$old"} = undef;		#(CoolTux) Wenn ein Hash nicht mehr benötigt wird dann delete
+	# Fehler in der nächsten Zeile:
+	# delete argument is not a HASH or ARRAY element or slice at lib/FHEM/Devices/Matrix/Matrix.pm line 197.
+	# delete $data{MATRIX}{"$old"}
+
     ($passResp,$passErr) = $hash->{helper}->{passwdobj}->setRename($new,$old);		#(CoolTux) Es empfiehlt sich ab zu fragen ob der Wechsel geklappt hat
 
 	Log3($name, 1, "$name : Matrix::Rename - error while change the password hash after rename - $passErr")
@@ -341,7 +352,6 @@ sub Attr {
 	if($cmd eq "set") {
 		if ($attr_name eq "matrixQuestion_") {
 			my @erg = split(/ /, $attr_value, 2);
-			$_[2] = "matrixQuestion_n";
 			return qq("attr $name $attr_name" ).I18N('require2') if (!$erg[1] || $erg[0] !~ /[0-9]/);
 			$_[2] = "matrixQuestion_$erg[0]";
 			$_[3] = $erg[1];

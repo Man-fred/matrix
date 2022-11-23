@@ -33,8 +33,8 @@ use FHEM::Meta;
 use GPUtils qw(GP_Export GP_Import);
 
 use JSON;
-use vars qw(%data);     #(CoolTux) sollte auch nicht nötig sein da Du es in dem Package nichts verwendest
-# use FHEM::Core::Authentication::Passwords qw(:ALL);       #(CoolTux) Kann raus da Du es ja hier nicht verwendest
+#use vars qw(%data);
+#use FHEM::Core::Authentication::Passwords qw(:ALL);
 require FHEM::Devices::Matrix::Matrix;
 
 #-- Run before package compilation
@@ -52,14 +52,14 @@ BEGIN {
 sub Initialize {
     my ($hash) = @_;
     
-    $hash->{DefFn}      = \&FHEM::Devices::Matrix::Define;
-    $hash->{UndefFn}    = \&FHEM::Devices::Matrix::Undef;
-    $hash->{SetFn}      = \&FHEM::Devices::Matrix::Set;
-    $hash->{GetFn}      = \&FHEM::Devices::Matrix::Get;
-    $hash->{AttrFn}     = \&FHEM::Devices::Matrix::Attr;
-    $hash->{ReadFn}     = \&FHEM::Devices::Matrix::Read;
-    $hash->{RenameFn}   = \&FHEM::Devices::Matrix::Rename;
-    $hash->{NotifyFn}   = \&FHEM::Devices::Matrix::Notify;
+    $hash->{DefFn}      = \&FHEM::Matrix::Define;
+    $hash->{UndefFn}    = \&FHEM::Matrix::Undef;
+    $hash->{SetFn}      = \&FHEM::Matrix::Set;
+    $hash->{GetFn}      = \&FHEM::Matrix::Get;
+    $hash->{AttrFn}     = \&FHEM::Matrix::Attr;
+    $hash->{ReadFn}     = \&FHEM::Matrix::Read;
+    $hash->{RenameFn}   = \&FHEM::Matrix::Rename;
+    $hash->{NotifyFn}   = \&FHEM::Matrix::Notify;
 
     #$hash->{AttrList}   = $FHEM::Devices::Matrix::attr_list;
     $hash->{AttrList}   = Attr_List();
