@@ -25,7 +25,7 @@
 ##########################################################################
 # $Id: 98_Matrix.pm 14063 2022-11-12 12:52:00Z Man-fred $
 
-package FHEM::Devices::Matrix;
+package FHEM::Matrix;
 use strict;
 use warnings;
 use HttpUtils;
@@ -33,8 +33,8 @@ use FHEM::Meta;
 use GPUtils qw(GP_Export GP_Import);
 
 use JSON;
-use vars qw(%data);
-use FHEM::Core::Authentication::Passwords qw(:ALL);
+use vars qw(%data);     #(CoolTux) sollte auch nicht nötig sein da Du es in dem Package nichts verwendest
+# use FHEM::Core::Authentication::Passwords qw(:ALL);       #(CoolTux) Kann raus da Du es ja hier nicht verwendest
 require FHEM::Devices::Matrix::Matrix;
 
 #-- Run before package compilation
