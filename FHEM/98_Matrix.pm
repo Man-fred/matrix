@@ -33,8 +33,6 @@ use FHEM::Meta;
 use GPUtils qw(GP_Export GP_Import);
 
 use JSON;
-#use vars qw(%data);
-#use FHEM::Core::Authentication::Passwords qw(:ALL);
 require FHEM::Devices::Matrix::Matrix;
 
 #-- Run before package compilation
