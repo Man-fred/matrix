@@ -30,7 +30,7 @@ use strict;
 use warnings;
 use HttpUtils;
 use FHEM::Meta;
-use GPUtils qw(GP_Export GP_Import);
+use GPUtils qw(GP_Export);
 
 use JSON;
 require FHEM::Devices::Matrix::Matrix;
@@ -42,26 +42,22 @@ BEGIN {
     GP_Export(qw(
         Initialize
     ));
-    GP_Import(qw(
-        readingFnAttributes
-    ));
 }
 
 sub Initialize {
     my ($hash) = @_;
     
-    $hash->{DefFn}      = \&FHEM::Matrix::Define;
-    $hash->{UndefFn}    = \&FHEM::Matrix::Undef;
-    $hash->{SetFn}      = \&FHEM::Matrix::Set;
-    $hash->{GetFn}      = \&FHEM::Matrix::Get;
-    $hash->{AttrFn}     = \&FHEM::Matrix::Attr;
-    $hash->{ReadFn}     = \&FHEM::Matrix::Read;
-    $hash->{RenameFn}   = \&FHEM::Matrix::Rename;
-    $hash->{NotifyFn}   = \&FHEM::Matrix::Notify;
+    $hash->{DefFn}      = \&FHEM::Devices::Matrix::Define;
+    $hash->{UndefFn}    = \&FHEM::Devices::Matrix::Undef;
+    $hash->{Delete}     = \&FHEM::Devices::Matrix::Delete;
+    $hash->{SetFn}      = \&FHEM::Devices::Matrix::Set;
+    $hash->{GetFn}      = \&FHEM::Devices::Matrix::Get;
+    $hash->{AttrFn}     = \&FHEM::Devices::Matrix::Attr;
+    $hash->{ReadFn}     = \&FHEM::Devices::Matrix::Read;
+    $hash->{RenameFn}   = \&FHEM::Devices::Matrix::Rename;
+    $hash->{NotifyFn}   = \&FHEM::Devices::Matrix::Notify;
 
-    #$hash->{AttrList}   = $FHEM::Devices::Matrix::attr_list;
-    $hash->{AttrList}   = Attr_List();
-    #$hash->{parseParams}    = 1;
+    $hash->{AttrList}   = FHEM::Devices::Matrix::Attr_List();
     return FHEM::Meta::InitMod( __FILE__, $hash );
 }
 
