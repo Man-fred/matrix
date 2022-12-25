@@ -33,34 +33,33 @@ use FHEM::Meta;
 use GPUtils qw(GP_Export);
 
 use JSON;
-require FHEM::Devices::Matrix::Matrix;
+require FHEM::Devices::Matrix::Client;
 
 #-- Run before package compilation
 BEGIN {
-
-    #-- Export to main context with different name
-    GP_Export(qw(
-        Initialize
-    ));
+    sub ::Matrix_Initialize { goto &Initialize }
 }
 
 sub Initialize {
     my ($hash) = @_;
-    
-    $hash->{DefFn}      = \&FHEM::Devices::Matrix::Define;
-    $hash->{UndefFn}    = \&FHEM::Devices::Matrix::Undef;
-    $hash->{Delete}     = \&FHEM::Devices::Matrix::Delete;
-    $hash->{SetFn}      = \&FHEM::Devices::Matrix::Set;
-    $hash->{GetFn}      = \&FHEM::Devices::Matrix::Get;
-    $hash->{AttrFn}     = \&FHEM::Devices::Matrix::Attr;
-    $hash->{ReadFn}     = \&FHEM::Devices::Matrix::Read;
-    $hash->{RenameFn}   = \&FHEM::Devices::Matrix::Rename;
-    $hash->{NotifyFn}   = \&FHEM::Devices::Matrix::Notify;
 
-    $hash->{AttrList}   = FHEM::Devices::Matrix::Attr_List();
+    $hash->{DefFn}    = \&FHEM::Devices::Matrix::Client::Define;
+    $hash->{UndefFn}  = \&FHEM::Devices::Matrix::Client::Undef;
+    $hash->{Delete}   = \&FHEM::Devices::Matrix::Client::Delete;
+    $hash->{SetFn}    = \&FHEM::Devices::Matrix::Client::Set;
+    $hash->{GetFn}    = \&FHEM::Devices::Matrix::Client::Get;
+    $hash->{AttrFn}   = \&FHEM::Devices::Matrix::Client::Attr;
+    $hash->{ReadFn}   = \&FHEM::Devices::Matrix::Client::Read;
+    $hash->{RenameFn} = \&FHEM::Devices::Matrix::Client::Rename;
+    $hash->{NotifyFn} = \&FHEM::Devices::Matrix::Client::Notify;
+
+    $hash->{AttrList} = FHEM::Devices::Matrix::Client::Attr_List();
+
+    $hash->{parseParams} =
+      1;    # wir verwenden parseParams für Set und Get (CoolTux)
+
     return FHEM::Meta::InitMod( __FILE__, $hash );
 }
-
 
 1;
 
