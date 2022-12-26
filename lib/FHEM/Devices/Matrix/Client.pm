@@ -26,6 +26,7 @@ use Carp qw( carp )
   ;    # wir verwenden Carp für eine bessere Fehlerrückgabe (CoolTux)
 
 use Data::Dumper;    # Debugging
+use Encode;
 
 # try to use JSON::MaybeXS wrapper
 #   for chance of better performance + open code
@@ -100,6 +101,7 @@ BEGIN {
           ReadingsVal
           HttpUtils_NonblockingGet
           InternalTimer
+          RemoveInternalTimer
           gettimeofday
           AnalyzeCommandChain
         )
@@ -439,7 +441,9 @@ sub Set {
 sub Attr {
     my ( $cmd, $name, $attr_name, $attr_value ) = @_;
 
-    Log3( $name, 4, "Attr - $cmd - $name - $attr_name - $attr_value" );
+    Log3( $name, 4,
+        "Attr - $cmd - $name - $attr_name - "
+          . ( defined($attr_value) && $attr_value ? $attr_value : '' ) );
 
     if ( $cmd eq 'set' ) {
         if ( $attr_name eq 'matrixQuestion_' ) {
@@ -476,6 +480,12 @@ sub Attr {
     }
 
     return;
+}
+
+sub Login {
+    my $hash = shift;
+
+    return _PerformHttpRequest( $hash, 'login', '' );
 }
 
 sub _Get_Message {    # wir machen daraus eine privat function (CoolTux)
@@ -720,6 +730,30 @@ sub _createParamRefForDef {
     );
 }
 
+sub _createPerformHttpRequestHousekeepingParamObj {
+    return 0
+      unless ( __PACKAGE__ eq caller(0) )
+      ;    # nur das eigene Package darf private Funktionen aufrufen (CoolTux)
+    my $createParamRefObj = shift;
+
+    my $param = {
+        timeout => 10,
+        hash    => $createParamRefObj->{hash}
+        ,    # Muss gesetzt werden, damit die Callback funktion wieder $hash hat
+        def => $createParamRefObj->{def},  # sichern für eventuelle Wiederholung
+        value => $createParamRefObj->{value}
+        ,                                  # sichern für eventuelle Wiederholung
+        method => 'POST',                  # standard, sonst überschreiben
+        header => 'User-Agent: HttpUtils/2.2.3\r\nAccept: application/json'
+        ,    # Den Header gemäß abzufragender Daten setzen
+        msgnumber => $createParamRefObj->{msgnumber},    # lfd. Nummer Request
+        callback  => \&ParseHttpResponse
+        ,    # Diese Funktion soll das Ergebnis dieser HTTP Anfrage bearbeiten
+    };
+
+    return $param;
+}
+
 sub _PerformHttpRequest {    # wir machen daraus eine privat function (CoolTux)
     return 0
       unless ( __PACKAGE__ eq caller(0) )
@@ -738,7 +772,8 @@ sub _PerformHttpRequest {    # wir machen daraus eine privat function (CoolTux)
 
     Log3( $name, 4, "$name : Matrix::_PerformHttpRequest $hash" );
 
-    $passwd = $hash->{helper}->{passwdobj}->getReadPassword($name)
+    $passwd =
+      encode_utf8( $hash->{helper}->{passwdobj}->getReadPassword($name) )
       if ( $def eq 'login' || $def eq 'reg2' );
 
     $hash->{helper}->{msgnumber} =
@@ -784,19 +819,8 @@ qq($name $hash->{helper}->{access_token} sync2refresh - $hash->{helper}->{next_r
         deviceId  => $deviceId,
     };
 
-    my $param = {
-        timeout => 10,
-        hash    => $hash
-        ,    # Muss gesetzt werden, damit die Callback funktion wieder $hash hat
-        def    => $def,      # sichern für eventuelle Wiederholung
-        value  => $value,    # sichern für eventuelle Wiederholung
-        method => 'POST',    # standard, sonst überschreiben
-        header => 'User-Agent: HttpUtils/2.2.3\r\nAccept: application/json'
-        ,                    # Den Header gemäß abzufragender Daten setzen
-        msgnumber => $msgnumber,           # lfd. Nummer Request
-        callback  => \&ParseHttpResponse
-        ,    # Diese Funktion soll das Ergebnis dieser HTTP Anfrage bearbeiten
-    };
+    my $param =
+      _createPerformHttpRequestHousekeepingParamObj($createParamRefObj);
 
     given ($def) {
         when ('logintypes') {
@@ -1225,7 +1249,7 @@ qq($name $hash->{helper}->{"access_token"} syncEnd $param->{msgnumber}: $hash->{
                             && $tl->{content}->{msgtype} eq 'm.text' )
                         {
                             my $sender  = $tl->{sender};
-                            my $message = $tl->{content}->{body};
+                            my $message = encode_utf8( $tl->{content}->{body} );
 
                             if ( AttrVal( $name, 'matrixSender', '' ) =~
                                 $sender )
@@ -1248,9 +1272,9 @@ qq($name $hash->{helper}->{"access_token"} syncEnd $param->{msgnumber}: $hash->{
                         {
                             my $sender = $tl->{sender};
                             my $message =
-                              $tl->{content}
-                              ->{'org.matrix.msc3381.poll.response'}
-                              ->{answers}[0];
+                              encode_utf8( $tl->{content}
+                                  ->{'org.matrix.msc3381.poll.response'}
+                                  ->{answers}[0] );
 
                             if ( $tl->{content}->{'m.relates_to'} ) {
                                 if (
@@ -1374,7 +1398,8 @@ qq($name $hash->{helper}->{"access_token"} syncEnd $param->{msgnumber}: $hash->{
             }
 
             RemoveInternalTimer($hash);
-            InternalTimer( gettimeofday() + $pauseLogin, \&Login, $hash );
+            InternalTimer( gettimeofday() + $pauseLogin,
+                \&FHEM::Devices::Matrix::Client::Login, $hash );
         }
     }
 
