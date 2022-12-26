@@ -519,6 +519,137 @@ sub _Get_Message {    # wir machen daraus eine privat function (CoolTux)
     return;
 }
 
+sub _createParamRefForDataLogin {
+    return 0
+      unless ( __PACKAGE__ eq caller(0) )
+      ;    # nur das eigene Package darf private Funktionen aufrufen (CoolTux)
+    my $createParamRefObj = shift;
+
+    return
+qq({"type":"m.login.token", "token":"$createParamRefObj->{passwd}", "user": "$createParamRefObj->{hash}->{USER}", "txn_id": "z4567gerww", "session":"1234"})
+      if (
+        AttrVal( $createParamRefObj->{hash}->{NAME}, 'matrixLogin', '' ) eq
+        'token' );
+
+    return
+'{"type":"m.login.password", "refresh_token": true, "identifier":{ "type":"m.id.user", "user":"'
+      . $createParamRefObj->{hash}->{USER}
+      . '" }, "password":"'
+      . ( defined( $createParamRefObj->{passwd} )
+          && $createParamRefObj->{passwd} ? $createParamRefObj->{passwd} : '' )
+      . '"'
+      . (
+        defined( $createParamRefObj->{deviceId} )
+          && $createParamRefObj->{deviceId}
+        ? $createParamRefObj->{deviceId}
+        : ''
+      ) . '}';
+}
+
+sub _createParamRefForDataRegister {
+    return 0
+      unless ( __PACKAGE__ eq caller(0) )
+      ;    # nur das eigene Package darf private Funktionen aufrufen (CoolTux)
+    my $createParamRefObj = shift;
+
+    return
+      '{"type":"m.login.password", "identifier":{ "type":"m.id.user", "user":"'
+      . (
+        defined( $createParamRefObj->{hash}->{USER} )
+          && $createParamRefObj->{hash}->{USER}
+        ? $createParamRefObj->{hash}->{USER}
+        : ''
+      )
+      . '" }, "password":"'
+      . (
+        defined( $createParamRefObj->{passwd} )
+          && $createParamRefObj->{passwd} ? $createParamRefObj->{passwd}
+        : ''
+      ) . '"}';
+}
+
+sub _createParamRefForDataReg1 {
+    return 0
+      unless ( __PACKAGE__ eq caller(0) )
+      ;    # nur das eigene Package darf private Funktionen aufrufen (CoolTux)
+    my $createParamRefObj = shift;
+
+    return
+      '{"type":"m.login.password", "identifier":{ "type":"m.id.user", "user":"'
+      . (
+        defined( $createParamRefObj->{hash}->{USER} )
+          && $createParamRefObj->{hash}->{USER}
+        ? $createParamRefObj->{hash}->{USER}
+        : ''
+      )
+      . '" }, "password":"'
+      . (
+        defined( $createParamRefObj->{passwd} )
+          && $createParamRefObj->{passwd} ? $createParamRefObj->{passwd}
+        : ''
+      ) . '"}';
+}
+
+sub _createParamRefForDataReg2 {
+    return 0
+      unless ( __PACKAGE__ eq caller(0) )
+      ;    # nur das eigene Package darf private Funktionen aufrufen (CoolTux)
+    my $createParamRefObj = shift;
+
+    return '{"username":"'
+      . (
+        defined( $createParamRefObj->{hash}->{USER} )
+          && $createParamRefObj->{hash}->{USER}
+        ? $createParamRefObj->{hash}->{USER}
+        : ''
+      )
+      . '", "password":"'
+      . (
+        defined( $createParamRefObj->{passwd} )
+          && $createParamRefObj->{passwd} ? $createParamRefObj->{passwd}
+        : ''
+      )
+      . '", "auth": {"session":"'
+      . (
+        defined( $createParamRefObj->{hash}->{helper}->{session} )
+          && $createParamRefObj->{hash}->{helper}->{session}
+        ? $createParamRefObj->{hash}->{helper}->{session}
+        : ''
+      ) . '","type":"m.login.dummy"}}';
+}
+
+sub _createParamRefForDataRefresh {
+    return 0
+      unless ( __PACKAGE__ eq caller(0) )
+      ;    # nur das eigene Package darf private Funktionen aufrufen (CoolTux)
+    my $createParamRefObj = shift;
+
+    return '{"refresh_token": "'
+      . (
+        defined( $createParamRefObj->{hash}->{helper}->{refresh_token} )
+          && $createParamRefObj->{hash}->{helper}->{refresh_token}
+        ? $createParamRefObj->{hash}->{helper}->{refresh_token}
+        : ''
+      ) . '"}';
+}
+
+sub _createParamRefForUrlMsg {
+    return 0
+      unless ( __PACKAGE__ eq caller(0) )
+      ;    # nur das eigene Package darf private Funktionen aufrufen (CoolTux)
+    my $createParamRefObj = shift;
+
+    return
+        'r0/rooms/'
+      . AttrVal( $createParamRefObj->{hash}->{NAME}, 'matrixMessage', '!!' )
+      . '/send/m.room.message?access_token='
+      . (
+          $createParamRefObj->{hash}->{helper}->{access_token}
+        ? $createParamRefObj->{hash}->{helper}->{access_token}
+        : ''
+      );
+}
+
 sub _createParamRefForDef {
     return 0
       unless ( __PACKAGE__ eq caller(0) )
@@ -529,16 +660,64 @@ sub _createParamRefForDef {
 
     my $paramref = {
         'logintypes' => {
-            'url'    => $createParamRefObjhash->{hash}->{URL} . 'r0/login',
-            'method' => 'GET',
+            'urlPath' => 'r0/login',
+            'method'  => 'GET',
         },
+
         'register' => {
-            'url'  => $createParamRefObjhash->{hash}->{URL},
-            'data' => '',
+            'urlPath' => 'v3/register',
+            'data'    => _createParamRefForDataRegister($createParamRefObj),
         },
+
+        'reg1' => {
+            'urlPath' => 'v3/register',
+            'data'    => _createParamRefForDataReg1($createParamRefObj),
+        },
+
+        'reg2' => {
+            'urlPath' => 'v3/register',
+            'data'    => _createParamRefForDataReg2($createParamRefObj),
+        },
+
+        'login' => {
+            'urlPath' => 'v3/login',
+            'data'    => _createParamRefForDataLogin($createParamRefObj),
+        },
+
+        'refresh' => {
+            'urlPath' => 'v1/refresh',
+            'data'    => _createParamRefForDataRefresh($createParamRefObj),
+        },
+
+        'wellknown' => {
+            'urlPath' => '/.well-known/matrix/client',
+            'data'    => undef,
+        },
+
+        'msg' => {
+            'urlPath' => _createParamRefForUrlMsg($createParamRefObj),
+            'data'    => '{"msgtype":"m.text", "body":"'
+              . $createParamRefObj->{value} . '"}',
+        },
+
     };
 
-    return $paramref->{$def}->{$paramValue};
+    ::Log( 1,
+        '!!!DEBUG - MsgcreateParamRef: ' . $paramref->{$def}->{$paramValue} );
+
+    ::Log( 1,
+            '!!!DEBUG - Def: '
+          . $def
+          . ' ParamValue: '
+          . $paramValue
+          . ' Resp: '
+          . $paramref->{$def}->{$paramValue} );
+    return (
+        defined( $paramref->{$def}->{$paramValue} )
+          && $paramref->{$def}->{$paramValue}
+        ? $paramref->{$def}->{$paramValue}
+        : ''
+    );
 }
 
 sub _PerformHttpRequest {    # wir machen daraus eine privat function (CoolTux)
@@ -600,13 +779,9 @@ qq($name $hash->{helper}->{access_token} sync2refresh - $hash->{helper}->{next_r
         def       => $def,
         value     => $value,
         now       => $now,
-        name      => $name,
         passwd    => $passwd,
         msgnumber => $msgnumber,
-        deviceId  => $device_id,
-        url       => undef,
-        data      => undef,
-        method    => undef,
+        deviceId  => $deviceId,
     };
 
     my $param = {
@@ -625,58 +800,39 @@ qq($name $hash->{helper}->{access_token} sync2refresh - $hash->{helper}->{next_r
 
     given ($def) {
         when ('logintypes') {
-            $param->{url}    = $hash->{URL} . 'r0/login';
-            $param->{method} = 'GET';
+            $param->{url} = $hash->{URL}
+              . _createParamRefForDef( $def, 'urlPath', $createParamRefObj );
+            $param->{method} =
+              _createParamRefForDef( $def, 'method', $createParamRefObj );
         }
 
-        when ('register') {
-            $param->{url} = $hash->{URL} . 'v3/register';
+        when (/^register|reg[1-2]|login|refresh|wellknown$/x) {
+            $param->{url} = $hash->{URL}
+              . _createParamRefForDef( $def, 'urlPath', $createParamRefObj );
             $param->{data} =
-'{"type":"m.login.password", "identifier":{ "type":"m.id.user", "user":"'
-              . $hash->{USER}
-              . '" }, "password":"'
-              . $passwd . '"}';
+              _createParamRefForDef( $def, 'data', $createParamRefObj );
+
+            Log3( $name, 5,
+qq($name $hash->{helper}->{access_token} refreshBeg $param->{'msgnumber'}: $hash->{helper}->{next_refresh} > $now)
+            ) if ( $def eq 'refresh' );
         }
 
-        when ('reg1') {
-            $param->{url} = $hash->{URL} . 'v3/register';
+        when ('msg') {
+            $param->{url} = $hash->{URL}
+              . _createParamRefForDef( $def, 'urlPath', $createParamRefObj );
             $param->{data} =
-'{"type":"m.login.password", "identifier":{ "type":"m.id.user", "user":"'
-              . $hash->{USER}
-              . '" }, "password":"'
-              . $passwd . '"}';
+              _createParamRefForDef( $def, 'data', $createParamRefObj );
         }
 
-        when ('reg2') {
-            $param->{url} = $hash->{URL} . 'v3/register';
-            $param->{data} =
-                '{"username":"'
-              . $hash->{USER}
-              . '", "password":"'
-              . $passwd
-              . '", "auth": {"session":"'
-              . $hash->{helper}->{session}
-              . '","type":"m.login.dummy"}}';
-        }
-
-        when ('login') {
-            if ( AttrVal( $name, 'matrixLogin', '' ) eq 'token' ) {
-                $param->{url} = $hash->{URL} . 'v3/login';
-                $param->{data} =
-qq({"type":"m.login.token", "token":"$passwd", "user": "$hash->{USER}", "txn_id": "z4567gerww", "session":"1234"});
-
-                #$param->{'method'} = 'GET';
-            }
-            else {
-                $param->{url} = $hash->{URL} . 'v3/login';
-                $param->{data} =
-'{"type":"m.login.password", "refresh_token": true, "identifier":{ "type":"m.id.user", "user":"'
-                  . $hash->{USER}
-                  . '" }, "password":"'
-                  . $passwd . '"'
-                  . $deviceId . '}';
-            }
-        }
+        # when ('msg') {
+        #     $param->{'url'} =
+        #         $hash->{URL}
+        #       . '/_matrix/client/r0/rooms/'
+        #       . AttrVal( $name, 'matrixMessage', '!!' )
+        #       . '/send/m.room.message?access_token='
+        #       . $hash->{helper}->{access_token};
+        #     $param->{data} = '{"msgtype":"m.text", "body":"' . $value . '"}';
+        # }
 
         when ('login2') {
             $param->{url} = $hash->{URL} . 'v3/login';
@@ -686,31 +842,6 @@ qq({"type":"m.login.token", "token":"$passwd", "user": "\@$hash->{USER}:matrix.o
 
             #$param->{'data'} = qq({"type":"m.login.token", "token":"$passwd"});
             }
-        }
-
-        when ('refresh') {
-            $param->{url} = $hash->{URL} . 'v1/refresh';
-            $param->{data} =
-              '{"refresh_token": "' . $hash->{helper}->{refresh_token} . '"}';
-
-            Log3( $name, 5,
-qq($name $hash->{helper}->{access_token} refreshBeg $param->{'msgnumber'}: $hash->{helper}->{next_refresh} > $now)
-            );
-        }
-
-        when ('wellknown') {
-            $param->{url} = $hash->{URL} . '/.well-known/matrix/client';
-        }
-
-        when ('msg') {
-            $param->{url} =
-                $hash->{URL}
-              . 'r0/rooms/'
-              . AttrVal( $name, 'matrixMessage', '!!' )
-              . '/send/m.room.message?access_token='
-              . $hash->{helper}->{access_token};
-
-            $param->{data} = '{"msgtype":"m.text", "body":"' . $value . '"}';
         }
 
         when ('questionX') {
@@ -951,6 +1082,7 @@ sub ParseHttpResponse {
         Log3( $name, 4, $def . " returned: $data" );    # Eintrag fürs Log
         my $decoded = eval { decode_json($data) };
         Log3( $name, 2, "$name: json error: $@ in data" ) if ($@);
+
         if ( $param->{code} == 200 ) {
             $hash->{helper}->{softfail} = 0;
             $hash->{helper}->{hardfail} = 0;
@@ -1194,6 +1326,11 @@ qq($name $hash->{helper}->{"access_token"} syncEnd $param->{msgnumber}: $hash->{
 
             #m.relates_to
         }
+
+        ::Log( 1,
+            '!!!DEBUG - TOKEN aus Hash: ' . $hash->{helper}->{access_token} );
+        ::Log( 1, '!!!DEBUG - TOKEN aus Decode: ' . $decoded->{access_token} )
+          if ( $decoded->{access_token} );
     }
 
     readingsEndUpdate( $hash, 1 );
