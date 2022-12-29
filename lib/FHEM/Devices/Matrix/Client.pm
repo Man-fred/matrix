@@ -352,9 +352,11 @@ sub Set {
         when ('msg') {
             return _PerformHttpRequest( $hash, $cmd, $value );
         }
+
         when ('pollFullstate') {
             readingsSingleUpdate( $hash, $cmd, $value, 1 );  # Readings erzeugen
         }
+
         when ('setPassword') {
             return qq(usage: $cmd pass=<password>)
               if ( scalar( @{$aArg} ) != 0
@@ -372,6 +374,7 @@ sub Set {
               if ( defined($passResp)
                 && !defined($passErr) );
         }
+
         when ('removePassword') {
             return 'usage: ' . $cmd
               if ( scalar( @{$aArg} ) != 0 );
@@ -389,22 +392,28 @@ sub Set {
                 && !defined($passErr) );
             return;
         }
+
         when ('filter') {
             return _PerformHttpRequest( $hash, $cmd, '' );
         }
+
         when ('question') {
             return _PerformHttpRequest( $hash, $cmd, $value );
         }
+
         when ('questionEnd') {
             return _PerformHttpRequest( $hash, $cmd, $value );
         }
+
         when ('register') {
             return _PerformHttpRequest( $hash, $cmd, '' )
               ; # 2 steps (ToDo: 3 steps empty -> dummy -> registration_token o.a.)
         }
+
         when ('login') {
             return _PerformHttpRequest( $hash, $cmd, '' );
         }
+
         when ('refresh') {
             return _PerformHttpRequest( $hash, $cmd, '' );
         }
@@ -660,6 +669,168 @@ sub _createParamRefForUrlMsg {
       );
 }
 
+sub _createParamRefForQuestionEnd {
+    return 0
+      unless ( __PACKAGE__ eq caller(0) )
+      ;    # nur das eigene Package darf private Funktionen aufrufen (CoolTux)
+    my $createParamRefObj = shift;
+    my $paramValue        = shift;
+
+    my $value;
+    $value = (
+        exists( $createParamRefObj->{value} )
+          && $createParamRefObj->{value}
+        ? $createParamRefObj->{value}
+        : ReadingsVal( $createParamRefObj->{hash}->{NAME}, 'questionId', '' )
+    );
+
+    return
+        'v3/rooms/'
+      . AttrVal( $createParamRefObj->{hash}->{NAME}, 'matrixMessage', '!!' )
+      . '/send/m.poll.end?access_token='
+      . (
+        defined(
+            $createParamRefObj->{hash}->{helper}->{access_token}
+              && $createParamRefObj->{hash}->{helper}->{access_token}
+            ? $createParamRefObj->{hash}->{helper}->{access_token}
+            : ''
+        )
+      ) if ( $paramValue eq 'urlPath' );
+
+    return
+        '{"m.relates_to": {"rel_type": "m.reference","eventId": "'
+      . $value
+      . '"},"org.matrix.msc3381.poll.end": {},'
+      . '"org.matrix.msc1767.text": "Antort '
+      . ReadingsVal( $createParamRefObj->{hash}->{NAME}, 'answer', '' )
+      . ' erhalten von '
+      . ReadingsVal( $createParamRefObj->{hash}->{NAME}, 'sender', '' ) . '"}'
+      if ( $paramValue eq 'data' );
+
+    return;
+}
+
+sub _createParamRefForFilter {
+    return 0
+      unless ( __PACKAGE__ eq caller(0) )
+      ;    # nur das eigene Package darf private Funktionen aufrufen (CoolTux)
+    my $createParamRefObj = shift;
+    my $paramValue        = shift;
+
+    return
+        'v3/user/'
+      . ReadingsVal( $createParamRefObj->{hash}->{NAME}, 'userId', 0 )
+      . '/filter'
+      . (
+        exists( $createParamRefObj->{value} )
+          && $createParamRefObj->{value} ? '/' . $createParamRefObj->{value}
+        : ''
+      )
+      . '?access_token='
+      . (
+        defined( $createParamRefObj->{hash}->{helper}->{access_token} )
+          && $createParamRefObj->{hash}->{helper}->{access_token}
+        ? $createParamRefObj->{hash}->{helper}->{access_token}
+        : ''
+      ) if ( $paramValue eq 'urlPath' );
+
+    return
+'{"event_fields": ["type","content","sender"],"event_format": "client", "presence": { "senders": [ "@xx:example.com"]}}'
+      if ( $paramValue eq 'data'
+        && exists( $createParamRefObj->{value} )
+        && $createParamRefObj->{value} );
+
+    return;
+}
+
+sub _createParamRefForQuestion {
+    return 0
+      unless ( __PACKAGE__ eq caller(0) )
+      ;    # nur das eigene Package darf private Funktionen aufrufen (CoolTux)
+    my $createParamRefObj = shift;
+    my $paramValue        = shift;
+
+    my $value = AttrVal( $createParamRefObj->{hash}->{NAME},
+        'matrixQuestion_' . $createParamRefObj->{value}, '' )
+      ;    #  if ($value =~ /[0-9]/);
+
+    my @question = split( ':', $value );
+    my $size     = @question;
+    my $q        = shift @question;
+
+    $value =~ s/:/<br>/gx;
+
+    # min. question and one answer
+    if ( int(@question) >= 2 ) {
+        return
+            'v3/rooms/'
+          . AttrVal( $createParamRefObj->{hash}->{NAME}, 'matrixMessage', '!!' )
+          . '/send/m.poll.start?access_token='
+          . $createParamRefObj->{hash}->{helper}->{access_token}
+          if ( $paramValue eq 'urlPath' );
+
+        my $data =
+            '{"org.matrix.msc3381.poll.start": {"max_selections": 1,'
+          . '"question": {"org.matrix.msc1767.text": "'
+          . $q . '"},'
+          . '"kind": "org.matrix.msc3381.poll.undisclosed","answers": [';
+
+        my $comma = '';
+
+        for my $answer (@question) {
+            $data .=
+qq($comma {"id": "$answer", "org.matrix.msc1767.text": "$answer"});
+            $comma = ',';
+        }
+
+        $data .=
+qq(],"org.matrix.msc1767.text": "$value"}, "m.markup": [{"mimetype": "text/plain", "body": "$value"}]});
+
+        return $data
+          if ( $paramValue eq 'data' );
+    }
+    else {
+        Log3( $createParamRefObj->{hash}->{NAME},
+            5, 'question: ' . $value . $size . $question[0] );
+        return;
+    }
+
+    return;
+}
+
+sub _createParamRefForUrlSync {
+    return 0
+      unless ( __PACKAGE__ eq caller(0) )
+      ;    # nur das eigene Package darf private Funktionen aufrufen (CoolTux)
+    my $createParamRefObj = shift;
+
+    my $since =
+      ReadingsVal( $createParamRefObj->{hash}->{NAME}, 'since', undef )
+      ? '&since='
+      . ReadingsVal( $createParamRefObj->{hash}->{NAME}, 'since', undef )
+      : '';
+
+    my $full_state =
+      ReadingsVal( $createParamRefObj->{hash}->{NAME}, 'pollFullstate', undef );
+
+    if ($full_state) {
+        $full_state = '&full_state=true';
+        readingsSingleUpdate( $createParamRefObj->{hash},
+            'pollFullstate', 0, 1 );
+    }
+    else {
+        $full_state = '';
+    }
+
+    return
+        'r0/sync?access_token='
+      . $createParamRefObj->{hash}->{helper}->{access_token}
+      . $since
+      . $full_state
+      . '&timeout=50000&filter='
+      . ReadingsVal( $createParamRefObj->{hash}->{NAME}, 'filterId', 0 );
+}
+
 sub _createParamRefForDef {
     return 0
       unless ( __PACKAGE__ eq caller(0) )
@@ -710,6 +881,28 @@ sub _createParamRefForDef {
               . $createParamRefObj->{value} . '"}',
         },
 
+        # 'questionEnd' => {
+        #     'urlPath' =>
+        #       _createParamRefForQuestionEnd( $createParamRefObj, 'urlPath' ),
+        #     'data' =>
+        #       _createParamRefForQuestionEnd( $createParamRefObj, 'data' ),
+        # },
+
+        # 'filter' => {
+        #     'urlPath' =>
+        #       _createParamRefForFilter( $createParamRefObj, 'urlPath' ),
+        #     'data' => _createParamRefForFilter( $createParamRefObj, 'data' ),
+        # },
+
+       # 'question' => {
+       #     'urlPath' =>
+       #       _createParamRefForQuestion( $createParamRefObj, 'urlPath' ),
+       #     'data' => _createParamRefForQuestion( $createParamRefObj, 'data' ),
+       # },
+
+        # 'sync' => {
+        #     'urlPath' => _createParamRefForUrlSync($createParamRefObj),
+        # },
     };
 
     ::Log( 1,
@@ -723,7 +916,7 @@ sub _createParamRefForDef {
           . ' Resp: '
           . $paramref->{$def}->{$paramValue} );
     return (
-        defined( $paramref->{$def}->{$paramValue} )
+        exists( $paramref->{$def}->{$paramValue} )
           && $paramref->{$def}->{$paramValue}
         ? $paramref->{$def}->{$paramValue}
         : ''
@@ -830,34 +1023,6 @@ qq($name $hash->{helper}->{access_token} sync2refresh - $hash->{helper}->{next_r
               _createParamRefForDef( $def, 'method', $createParamRefObj );
         }
 
-        when (/^register|reg[1-2]|login|refresh|wellknown$/x) {
-            $param->{url} = $hash->{URL}
-              . _createParamRefForDef( $def, 'urlPath', $createParamRefObj );
-            $param->{data} =
-              _createParamRefForDef( $def, 'data', $createParamRefObj );
-
-            Log3( $name, 5,
-qq($name $hash->{helper}->{access_token} refreshBeg $param->{'msgnumber'}: $hash->{helper}->{next_refresh} > $now)
-            ) if ( $def eq 'refresh' );
-        }
-
-        when ('msg') {
-            $param->{url} = $hash->{URL}
-              . _createParamRefForDef( $def, 'urlPath', $createParamRefObj );
-            $param->{data} =
-              _createParamRefForDef( $def, 'data', $createParamRefObj );
-        }
-
-        # when ('msg') {
-        #     $param->{'url'} =
-        #         $hash->{URL}
-        #       . '/_matrix/client/r0/rooms/'
-        #       . AttrVal( $name, 'matrixMessage', '!!' )
-        #       . '/send/m.room.message?access_token='
-        #       . $hash->{helper}->{access_token};
-        #     $param->{data} = '{"msgtype":"m.text", "body":"' . $value . '"}';
-        # }
-
         when ('login2') {
             $param->{url} = $hash->{URL} . 'v3/login';
             if ( AttrVal( $name, 'matrixLogin', '' ) eq 'token' ) {
@@ -913,92 +1078,16 @@ qq(],"org.matrix.msc1767.text": "$value"}, "m.markup": [{"mimetype": "text/plain
 
         when ('question') {
             $hash->{helper}->{question} = $value;
-            $value = AttrVal( $name, "matrixQuestion_$value", "" )
-              ;    #  if ($value =~ /[0-9]/);
 
-            my @question = split( ':', $value );
-            my $size     = @question;
-            my $q        = shift @question;
-
-            $value =~ s/:/<br>/gx;
-
-            # min. question and one answer
-            if ( int(@question) >= 2 ) {
-                $param->{url} =
-                    $hash->{URL}
-                  . 'v3/rooms/'
-                  . AttrVal( $name, 'matrixMessage', '!!' )
-                  . '/send/m.poll.start?access_token='
-                  . $hash->{helper}->{access_token};
-
-                $param->{data} =
-                    '{"org.matrix.msc3381.poll.start": {"max_selections": 1,'
-                  . '"question": {"org.matrix.msc1767.text": "'
-                  . $q . '"},'
-                  . '"kind": "org.matrix.msc3381.poll.undisclosed","answers": [';
-
-                my $comma = '';
-
-                for my $answer (@question) {
-                    $param->{data} .=
-qq($comma {"id": "$answer", "org.matrix.msc1767.text": "$answer"});
-                    $comma = ',';
-                }
-
-                $param->{data} .=
-qq(],"org.matrix.msc1767.text": "$value"}, "m.markup": [{"mimetype": "text/plain", "body": "$value"}]});
-            }
-            else {
-                Log3( $name, 5, "question: $value $size $question[0]" );
-                return;
-            }
-        }
-
-        when ('questionEnd') {
-            $value = ReadingsVal( $name, 'questionId', '' )
-              if ( !$value );
-
-            $param->{url} =
-                $hash->{URL}
-              . 'v3/rooms/'
-              . AttrVal( $name, 'matrixMessage', '!!' )
-              . '/send/m.poll.end?access_token='
-              . $hash->{helper}->{access_token};
-
+            $param->{url} = $hash->{URL}
+              . _createParamRefForDef( $def, 'urlPath', $createParamRefObj );
             $param->{data} =
-                '{"m.relates_to": {"rel_type": "m.reference","eventId": "'
-              . $value
-              . '"},"org.matrix.msc3381.poll.end": {},'
-              . '"org.matrix.msc1767.text": "Antort '
-              . ReadingsVal( $name, 'answer', '' )
-              . ' erhalten von '
-              . ReadingsVal( $name, 'sender', '' ) . '"}';
+              _createParamRefForDef( $def, 'data', $createParamRefObj );
         }
 
         when ('sync') {
-            my $since =
-              ReadingsVal( $name, 'since', undef )
-              ? '&since=' . ReadingsVal( $name, 'since', undef )
-              : '';
-
-            my $full_state = ReadingsVal( $name, 'pollFullstate', undef );
-
-            if ($full_state) {
-                $full_state = '&full_state=true';
-                readingsSingleUpdate( $hash, 'pollFullstate', 0, 1 );
-            }
-            else {
-                $full_state = '';
-            }
-
-            $param->{url} =
-                $hash->{URL}
-              . 'r0/sync?access_token='
-              . $hash->{helper}->{access_token}
-              . $since
-              . $full_state
-              . '&timeout=50000&filter='
-              . ReadingsVal( $name, 'filterId', 0 );
+            $param->{url} = $hash->{URL}
+              . _createParamRefForDef( $def, 'urlPath', $createParamRefObj );
 
             $param->{method}  = 'GET';
             $param->{timeout} = 60;
@@ -1010,37 +1099,35 @@ qq($name $hash->{helper}->{access_token} syncBeg $param->{'msgnumber'}: $hash->{
         }
 
         when ('filter') {
-            if ($value) {    # get
-                $param->{url} =
-                    $hash->{URL}
-                  . 'v3/user/'
-                  . ReadingsVal( $name, "userId", 0 )
-                  . '/filter/'
-                  . $value
-                  . '?access_token='
-                  . $hash->{helper}->{access_token};
+            $param->{url} = $hash->{URL}
+              . _createParamRefForDef( $def, 'urlPath', $createParamRefObj );
+            $param->{data} =
+              _createParamRefForDef( $def, 'data', $createParamRefObj );
 
-                $param->{method} = 'GET';
-            }
-            else {
-                $param->{url} =
-                    $hash->{URL}
-                  . 'v3/user/'
-                  . ReadingsVal( $name, "userId", 0 )
-                  . '/filter?access_token='
-                  . $hash->{helper}->{access_token};
+            $param->{method} = 'GET'
+              if ($value);
+        }
 
-                $param->{data} = '{';
-                $param->{data} .=
-                  '"event_fields": ["type","content","sender"],';
+        when ('refresh') {
+            $param->{url} = $hash->{URL}
+              . _createParamRefForDef( $def, 'urlPath', $createParamRefObj );
+            $param->{data} =
+              _createParamRefForDef( $def, 'data', $createParamRefObj );
 
-                $param->{data} .= '"event_format": "client", ';
-                $param->{data} .=
-                  '"presence": { "senders": [ "@xx:example.com"]}'
-                  ;    # no presence
-                 #$param->{'data'} .= '"room": { "ephemeral": {"rooms": ["'.AttrVal($name, 'matrixRoom', '!!').'"],"types": ["m.receipt"]}, "state": {"types": ["m.room.*"]},"timeline": {"types": ["m.room.message"] } }';
-                $param->{data} .= '}';
-            }
+            Log3( $name, 5,
+qq($name $hash->{helper}->{access_token} refreshBeg $param->{'msgnumber'}: $hash->{helper}->{next_refresh} > $now)
+            );
+        }
+
+        default {
+            $param->{url} = $hash->{URL}
+              . _createParamRefForDef( $def, 'urlPath', $createParamRefObj );
+            $param->{data} =
+              _createParamRefForDef( $def, 'data', $createParamRefObj );
+
+            $param->{method} = 'GET'
+              if ( $def eq 'filter' && $value );
+
         }
     }
 
