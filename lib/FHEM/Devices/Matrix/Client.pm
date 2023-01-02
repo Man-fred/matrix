@@ -734,13 +734,13 @@ sub _createParamRefForFilter {
         : ''
       ) if ( $paramValue eq 'urlPath' );
 
-    return
-'{"event_fields": ["type","content","sender"],"event_format": "client", "presence": { "senders": [ "@xx:example.com"]}}'
-      if ( $paramValue eq 'data'
-        && exists( $createParamRefObj->{value} )
-        && $createParamRefObj->{value} );
-
-    return;
+    return (
+        $paramValue eq 'data'
+          && exists( $createParamRefObj->{value} )
+          && $createParamRefObj->{value}
+        ? '{"event_fields": ["type","content","sender"],"event_format": "client", "presence": { "senders": [ "@xx:example.com"]}}'
+        : ''
+    );
 }
 
 sub _createParamRefForQuestion {
@@ -766,8 +766,11 @@ sub _createParamRefForQuestion {
             'v3/rooms/'
           . AttrVal( $createParamRefObj->{hash}->{NAME}, 'matrixMessage', '!!' )
           . '/send/m.poll.start?access_token='
-          . $createParamRefObj->{hash}->{helper}->{access_token}
-          if ( $paramValue eq 'urlPath' );
+          . (
+              $createParamRefObj->{hash}->{helper}->{access_token}
+            ? $createParamRefObj->{hash}->{helper}->{access_token}
+            : ''
+          ) if ( $paramValue eq 'urlPath' );
 
         my $data =
             '{"org.matrix.msc3381.poll.start": {"max_selections": 1,'
@@ -790,8 +793,12 @@ qq(],"org.matrix.msc1767.text": "$value"}, "m.markup": [{"mimetype": "text/plain
           if ( $paramValue eq 'data' );
     }
     else {
-        Log3( $createParamRefObj->{hash}->{NAME},
-            5, 'question: ' . $value . $size . $question[0] );
+        Log3( $createParamRefObj->{hash}->{NAME}, 5,
+                'question: '
+              . $value
+              . $size
+              . ( defined( $question[0] ) && $question[0] ? $question[0] : '' )
+        );
         return;
     }
 
@@ -822,9 +829,12 @@ sub _createParamRefForUrlSync {
         $full_state = '';
     }
 
-    return
-        'r0/sync?access_token='
-      . $createParamRefObj->{hash}->{helper}->{access_token}
+    return 'r0/sync?access_token='
+      . (
+          $createParamRefObj->{hash}->{helper}->{access_token}
+        ? $createParamRefObj->{hash}->{helper}->{access_token}
+        : ''
+      )
       . $since
       . $full_state
       . '&timeout=50000&filter='
@@ -881,28 +891,28 @@ sub _createParamRefForDef {
               . $createParamRefObj->{value} . '"}',
         },
 
-        # 'questionEnd' => {
-        #     'urlPath' =>
-        #       _createParamRefForQuestionEnd( $createParamRefObj, 'urlPath' ),
-        #     'data' =>
-        #       _createParamRefForQuestionEnd( $createParamRefObj, 'data' ),
-        # },
+        'questionEnd' => {
+            'urlPath' =>
+              _createParamRefForQuestionEnd( $createParamRefObj, 'urlPath' ),
+            'data' =>
+              _createParamRefForQuestionEnd( $createParamRefObj, 'data' ),
+        },
 
-        # 'filter' => {
-        #     'urlPath' =>
-        #       _createParamRefForFilter( $createParamRefObj, 'urlPath' ),
-        #     'data' => _createParamRefForFilter( $createParamRefObj, 'data' ),
-        # },
+        'filter' => {
+            'urlPath' =>
+              _createParamRefForFilter( $createParamRefObj, 'urlPath' ),
+            'data' => _createParamRefForFilter( $createParamRefObj, 'data' ),
+        },
 
-       # 'question' => {
-       #     'urlPath' =>
-       #       _createParamRefForQuestion( $createParamRefObj, 'urlPath' ),
-       #     'data' => _createParamRefForQuestion( $createParamRefObj, 'data' ),
-       # },
+        'question' => {
+            'urlPath' =>
+              _createParamRefForQuestion( $createParamRefObj, 'urlPath' ),
+            'data' => _createParamRefForQuestion( $createParamRefObj, 'data' ),
+        },
 
-        # 'sync' => {
-        #     'urlPath' => _createParamRefForUrlSync($createParamRefObj),
-        # },
+        'sync' => {
+            'urlPath' => _createParamRefForUrlSync($createParamRefObj),
+        },
     };
 
     ::Log( 1,
