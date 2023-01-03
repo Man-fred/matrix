@@ -915,16 +915,6 @@ sub _createParamRefForDef {
         },
     };
 
-    ::Log( 1,
-        '!!!DEBUG - MsgcreateParamRef: ' . $paramref->{$def}->{$paramValue} );
-
-    ::Log( 1,
-            '!!!DEBUG - Def: '
-          . $def
-          . ' ParamValue: '
-          . $paramValue
-          . ' Resp: '
-          . $paramref->{$def}->{$paramValue} );
     return (
         exists( $paramref->{$def}->{$paramValue} )
           && $paramref->{$def}->{$paramValue}
@@ -1160,133 +1150,151 @@ qq($name $param->{'msgnumber'} $def Request Busy/Sync $hash->{helper}->{busy} / 
     return;
 }
 
-sub ParseHttpResponse {
+sub _ParseHttpResponseWithError {
+    return 0
+      unless ( __PACKAGE__ eq caller(0) )
+      ;    # nur das eigene Package darf private Funktionen aufrufen (CoolTux)
 
-#(CoolTux) hier solltest Du überlegen das Du die einzelnen Anweisung nach der Bedingung in einzelne Funktionen auslagerst
-# Subroutine "_PerformHttpRequest" with high complexity score
-#(Man-Fred) da ich noch nicht wusste wie ähnlich die Ergebnisse sind habe ich erst mal alles zusammen ausgewertet
-
+    my $hash  = shift;
     my $param = shift;
     my $err   = shift;
+
+    my $name = $hash->{NAME};
+
+    Log3( $name, 2, "error while requesting " . $param->{url} . " - $err" )
+      ;    # Eintrag fürs Log
+
+    readingsBulkUpdate( $hash, 'lastRespErr', $err );    # Reading erzeugen
+    readingsBulkUpdate( $hash, 'state', 'Error - look lastRespErr reading' );
+    $hash->{helper}->{softfail} = 3;
+    $hash->{helper}->{hardfail}++;
+
+    return;
+}
+
+sub _ParseHttpResponseErrorCodeCheck {
+    return 0
+      unless ( __PACKAGE__ eq caller(0) )
+      ;    # nur das eigene Package darf private Funktionen aufrufen (CoolTux)
+
+    my $param = shift;
     my $data  = shift;
+    my $now   = shift;
 
-    #::Log( 1, '!!!DEBUG!!! - Error: ' . $err );
-    #::Log( 1, '!!!DEBUG!!! - Param: ' . Dumper $param);
-    #::Log( 1, '!!!DEBUG!!! - Data: ' . Dumper $data);
+    my $hash = $param->{hash};
+    my $name = $hash->{NAME};
 
-    #return;
-
-    my $hash        = $param->{hash};
-    my $def         = $param->{def};
-    my $value       = $param->{value};
-    my $name        = $hash->{NAME};
-    my $now         = gettimeofday();
-    my $nextRequest = "";
-
-    Log3( $name, 3,
-        qq($name $param->{'msgnumber'} $def Result $param->{code}) );
-    readingsBeginUpdate($hash);
-    ###readingsBulkUpdate($hash, "httpHeader", $param->{httpheader});
-    readingsBulkUpdate( $hash, 'httpStatus', $param->{code} );
-    readingsBulkUpdate( $hash, 'state',      $def . ' - ' . $param->{code} );
-    if ( $err ne "" ) {   # wenn ein Fehler bei der HTTP Abfrage aufgetreten ist
-        Log3( $name, 2, "error while requesting " . $param->{url} . " - $err" )
-          ;               # Eintrag fürs Log
-        readingsBulkUpdate( $hash, 'lastRespErr', $err );    # Reading erzeugen
-        readingsBulkUpdate( $hash, 'state',
-            'Error - look lastRespErr reading' );
-        $hash->{helper}->{softfail} = 3;
-        $hash->{helper}->{hardfail}++;
+    if ( $param->{code} == 200 ) {
+        $hash->{helper}->{softfail} = 0;
+        $hash->{helper}->{hardfail} = 0;
     }
-    elsif ( $data ne '' )
-    { # wenn die Abfrage erfolgreich war ($data enthält die Ergebnisdaten des HTTP Aufrufes)
-        Log3( $name, 4, $def . " returned: $data" );    # Eintrag fürs Log
-        my $decoded = eval { decode_json($data) };
-        Log3( $name, 2, "$name: json error: $@ in data" ) if ($@);
+    else {
+        $hash->{helper}->{softfail}++;
+        $hash->{helper}->{hardfail}++
+          if ( $hash->{helper}->{softfail} > 3 );
+        readingsBulkUpdate( $hash, 'lastRespErr',
+            qq(S $hash->{helper}->{'softfail'}: $data) );
+        Log3( $name, 5,
+qq($name $hash->{helper}->{access_token} $param->{def}End $param->{'msgnumber'}: $hash->{helper}->{next_refresh} > $now)
+        );
+    }
 
-        if ( $param->{code} == 200 ) {
-            $hash->{helper}->{softfail} = 0;
-            $hash->{helper}->{hardfail} = 0;
-        }
-        else {
-            $hash->{helper}->{softfail}++;
-            $hash->{helper}->{hardfail}++
-              if ( $hash->{helper}->{softfail} > 3 );
-            readingsBulkUpdate( $hash, 'lastRespErr',
-                qq(S $hash->{helper}->{'softfail'}: $data) );
-            Log3( $name, 5,
-qq($name $hash->{helper}->{access_token} ${def}End $param->{'msgnumber'}: $hash->{helper}->{next_refresh} > $now)
-            );
-        }
+    return;
+}
 
-        # readingsBulkUpdate($hash, "fullResponse", $data);
+sub _ParseHttpResponseM_UNKNOWN_TOKEN {
+    return 0
+      unless ( __PACKAGE__ eq caller(0) )
+      ;    # nur das eigene Package darf private Funktionen aufrufen (CoolTux)
 
-        # default next request
-        $nextRequest = 'sync';
+    my $param       = shift;
+    my $decoded     = shift;
+    my $nextRequest = shift;
 
-        # An dieser Stelle die Antwort parsen / verarbeiten mit $data
+    my $hash = $param->{hash};
 
-        # "errcode":"M_UNKNOWN_TOKEN: login or refresh
-        my $errcode = $decoded->{'errcode'} ? $decoded->{'errcode'} : '';
-        if ( $errcode eq 'M_UNKNOWN_TOKEN' ) {
-            $hash->{helper}->{'repeat'} = $param if ( $def ne 'sync' );
-            if ( $decoded->{'error'} eq 'Access token has expired' ) {
-                if ( $decoded->{'soft_logout'} eq 'true' ) {
-                    $nextRequest = 'refresh';
-                }
-                else {
-                    $nextRequest = 'login';
-                }
+    my $errcode = $decoded->{'errcode'} ? $decoded->{'errcode'} : '';
+    if ( $errcode eq 'M_UNKNOWN_TOKEN' ) {
+        $hash->{helper}->{'repeat'} = $param
+          if ( $param->{def} ne 'sync' );
+
+        if ( $decoded->{'error'} eq 'Access token has expired' ) {
+            if ( $decoded->{'soft_logout'} eq 'true' ) {
+                $nextRequest = 'refresh';
             }
-            elsif ( $decoded->{'error'} eq 'refresh token does not exist' ) {
+            else {
                 $nextRequest = 'login';
             }
         }
-
-        if ( $def eq 'register' ) {
-            $hash->{helper}->{session} = $decoded->{session};
-            $nextRequest = '';                                  #'reg2';
+        elsif ( $decoded->{'error'} eq 'refresh token does not exist' ) {
+            $nextRequest = 'login';
         }
-        $hash->{helper}->{session} = $decoded->{session}
-          if ( $decoded->{'session'} );
-        readingsBulkUpdate( $hash, 'session', $decoded->{session} )
-          if ( $decoded->{'session'} );
+    }
 
-        if ( $def eq 'reg2' || $def eq 'login' || $def eq 'refresh' ) {
-            readingsBulkUpdate( $hash, 'lastRegister', $param->{code} )
-              if $def eq 'reg2';
-            readingsBulkUpdate( $hash, 'lastLogin', $param->{code} )
-              if $def eq 'login';
-            readingsBulkUpdate( $hash, 'lastRefresh', $param->{code} )
-              if $def eq 'refresh';
-            if ( $param->{code} == 200 ) {
-                readingsBulkUpdate( $hash, 'userId', $decoded->{user_id} )
-                  if ( $decoded->{user_id} );
-                readingsBulkUpdate( $hash, 'homeServer',
-                    $decoded->{homeServer} )
-                  if ( $decoded->{homeServer} );
-                readingsBulkUpdate( $hash, 'deviceId', $decoded->{device_id} )
-                  if ( $decoded->{device_id} );
+    return $nextRequest;
+}
 
-                $hash->{helper}->{expires} = $decoded->{expires_in_ms}
-                  if ( $decoded->{expires_in_ms} );
-                $hash->{helper}->{refresh_token} = $decoded->{refresh_token}
-                  if ( $decoded->{refresh_token} );
-                $hash->{helper}->{access_token} = $decoded->{access_token}
-                  if ( $decoded->{access_token} );
-                $hash->{helper}->{next_refresh} =
-                  $now + $hash->{helper}->{expires} / 1000 -
-                  60;    # refresh one minute before end
-            }
-            Log3( $name, 5,
+sub _ParseHttpResponseReg2LoginRefresh {
+    return 0
+      unless ( __PACKAGE__ eq caller(0) )
+      ;    # nur das eigene Package darf private Funktionen aufrufen (CoolTux)
+
+    my $param   = shift;
+    my $decoded = shift;
+    my $now     = shift;
+
+    my $hash = $param->{hash};
+    my $name = $hash->{NAME};
+    my $def  = $param->{def};
+
+    readingsBulkUpdate( $hash, 'lastRegister', $param->{code} )
+      if $def eq 'reg2';
+    readingsBulkUpdate( $hash, 'lastLogin', $param->{code} )
+      if $def eq 'login';
+    readingsBulkUpdate( $hash, 'lastRefresh', $param->{code} )
+      if $def eq 'refresh';
+
+    if ( $param->{code} == 200 ) {
+        readingsBulkUpdate( $hash, 'userId', $decoded->{user_id} )
+          if ( $decoded->{user_id} );
+        readingsBulkUpdate( $hash, 'homeServer', $decoded->{homeServer} )
+          if ( $decoded->{homeServer} );
+        readingsBulkUpdate( $hash, 'deviceId', $decoded->{device_id} )
+          if ( $decoded->{device_id} );
+
+        $hash->{helper}->{expires} = $decoded->{expires_in_ms}
+          if ( $decoded->{expires_in_ms} );
+        $hash->{helper}->{refresh_token} = $decoded->{refresh_token}
+          if ( $decoded->{refresh_token} );
+        $hash->{helper}->{access_token} = $decoded->{access_token}
+          if ( $decoded->{access_token} );
+        $hash->{helper}->{next_refresh} =
+          $now + $hash->{helper}->{expires} / 1000 -
+          60;    # refresh one minute before end
+    }
+
+    Log3( $name, 5,
 qq($name $hash->{helper}->{access_token} refreshEnd $param->{msgnumber}: $hash->{helper}->{'next_refresh'} > $now)
-            );
-        }
-        if ( $def eq "wellknown" ) {
+    );
 
-            # https://spec.matrix.org/unstable/client-server-api/
-        }
-        if ( $param->{code} == 200 && $def eq "sync" ) {
+    return;
+}
+
+sub _ParseHttpResponseSync {
+    return 0
+      unless ( __PACKAGE__ eq caller(0) )
+      ;    # nur das eigene Package darf private Funktionen aufrufen (CoolTux)
+
+    my $param       = shift;
+    my $decoded     = shift;
+    my $nextRequest = shift;
+    my $now         = shift;
+
+    my $hash = $param->{hash};
+    my $name = $hash->{NAME};
+
+    given ( $param->{code} ) {
+        when (200) {
             Log3( $name, 5,
 qq($name $hash->{helper}->{"access_token"} syncEnd $param->{msgnumber}: $hash->{helper}->{'next_refresh'} > $now)
             );
@@ -1326,8 +1334,8 @@ qq($name $hash->{helper}->{"access_token"} syncEnd $param->{msgnumber}: $hash->{
                           if ( $ev->{type} eq 'm.room.member' );
                     }
 
-                    readingsBulkUpdate( $hash, 'room' . $pos . '.member',
-                        $member );
+                    readingsBulkUpdate( $hash,
+                        'room' . $pos . '.member', $member );
 
                     for my $tl ( $list->{$id}->{timeline}->{events}->@* ) {
                         readingsBulkUpdate(
@@ -1345,14 +1353,15 @@ qq($name $hash->{helper}->{"access_token"} syncEnd $param->{msgnumber}: $hash->{
                         if (   $tl->{type} eq 'm.room.message'
                             && $tl->{content}->{msgtype} eq 'm.text' )
                         {
-                            my $sender  = $tl->{sender};
-                            my $message = encode_utf8( $tl->{content}->{body} );
+                            my $sender = $tl->{sender};
+                            my $message =
+                              encode_utf8( $tl->{content}->{body} );
 
                             if ( AttrVal( $name, 'matrixSender', '' ) =~
                                 $sender )
                             {
-                                readingsBulkUpdate( $hash, "message",
-                                    $message );
+                                readingsBulkUpdate( $hash,
+                                    "message", $message );
                                 readingsBulkUpdate( $hash, "sender", $sender );
 
                                 # command
@@ -1389,8 +1398,8 @@ qq($name $hash->{helper}->{"access_token"} syncEnd $param->{msgnumber}: $hash->{
                             if ( AttrVal( $name, 'matrixSender', '' ) =~
                                 $sender )
                             {
-                                readingsBulkUpdate( $hash, 'message',
-                                    $message );
+                                readingsBulkUpdate( $hash,
+                                    'message', $message );
 
                                 readingsBulkUpdate( $hash, 'sender', $sender );
                                 $nextRequest = 'questionEnd';
@@ -1406,52 +1415,142 @@ qq($name $hash->{helper}->{"access_token"} syncEnd $param->{msgnumber}: $hash->{
                 }
             }
         }
+    }
 
-        if ( $def eq 'logintypes' ) {
-            my $types = '';
-            foreach my $flow ( $decoded->{'flows'}->@* ) {
-                if ( $flow->{'type'} =~ /m\.login\.(.*)/x ) {
+    return;
+}
 
-                    #$types .= $flow->{'type'} . ' ';
-                    $types .= $1 . ' ';    # if ($flow->{'type'} );
-                }
+sub _ParseHttpResponseLogintypes {
+    return 0
+      unless ( __PACKAGE__ eq caller(0) )
+      ;    # nur das eigene Package darf private Funktionen aufrufen (CoolTux)
+
+    my $hash    = shift;
+    my $decoded = shift;
+
+    my $types = '';
+    foreach my $flow ( $decoded->{'flows'}->@* ) {
+        if ( $flow->{'type'} =~ /m\.login\.(.*)/x ) {
+
+            #$types .= $flow->{'type'} . ' ';
+            $types .= $1 . ' ';    # if ($flow->{'type'} );
+        }
+    }
+
+    readingsBulkUpdate( $hash, 'logintypes', $types );
+
+    return;
+}
+
+sub ParseHttpResponse {
+
+#(CoolTux) hier solltest Du überlegen das Du die einzelnen Anweisung nach der Bedingung in einzelne Funktionen auslagerst
+# Subroutine "_PerformHttpRequest" with high complexity score
+#(Man-Fred) da ich noch nicht wusste wie ähnlich die Ergebnisse sind habe ich erst mal alles zusammen ausgewertet
+
+    my $param = shift;
+    my $err   = shift;
+    my $data  = shift;
+
+    my $hash        = $param->{hash};
+    my $def         = $param->{def};
+    my $value       = $param->{value};
+    my $name        = $hash->{NAME};
+    my $now         = gettimeofday();
+    my $nextRequest = "";
+
+    Log3( $name, 3,
+        qq($name $param->{'msgnumber'} $def Result $param->{code}) );
+    readingsBeginUpdate($hash);
+    ###readingsBulkUpdate($hash, "httpHeader", $param->{httpheader});
+    readingsBulkUpdate( $hash, 'httpStatus', $param->{code} );
+    readingsBulkUpdate( $hash, 'state',      $def . ' - ' . $param->{code} );
+
+    if ( $err ne '' ) {   # wenn ein Fehler bei der HTTP Abfrage aufgetreten ist
+        _ParseHttpResponseWithError( $hash, $param, $err );
+    }
+
+    elsif ( $data ne '' )
+    { # wenn die Abfrage erfolgreich war ($data enthält die Ergebnisdaten des HTTP Aufrufes)
+        Log3( $name, 4, $def . " returned: $data" );    # Eintrag fürs Log
+
+        my $decoded = eval { decode_json($data) };
+        if ($@) {
+            Log3( $name, 2, "$name: json error: $@ in data" );
+        }
+
+        _ParseHttpResponseErrorCodeCheck( $param, $data, $now );
+
+        # readingsBulkUpdate($hash, "fullResponse", $data);
+
+        # default next request
+        $nextRequest = 'sync';
+
+        # An dieser Stelle die Antwort parsen / verarbeiten mit $data
+
+        # "errcode":"M_UNKNOWN_TOKEN: login or refresh
+        $nextRequest =
+          _ParseHttpResponseM_UNKNOWN_TOKEN( $param, $decoded, $nextRequest );
+
+        given ($def) {
+
+            when ('register') {
+                $hash->{helper}->{session} = $decoded->{session};
+                $nextRequest = '';                                  #'reg2';
             }
 
-            readingsBulkUpdate( $hash, 'logintypes', $types );
+            $hash->{helper}->{session} = $decoded->{session}
+              if ( $decoded->{'session'} );
+            readingsBulkUpdate( $hash, 'session', $decoded->{session} )
+              if ( $decoded->{'session'} );
+
+            when (/^reg2|login|refresh$/x) {
+                _ParseHttpResponseReg2LoginRefresh( $param, $decoded, $now );
+            }
+
+            when ('wellknown') {
+
+                # https://spec.matrix.org/unstable/client-server-api/
+            }
+
+            when ('sync') {
+                _ParseHttpResponseSync( $param, $decoded, $nextRequest, $now );
+            }
+
+            when ('logintypes') {
+                _ParseHttpResponseLogintypes( $hash, $decoded );
+            }
+
+            when ('filter') {
+                readingsBulkUpdate( $hash, 'filterId', $decoded->{'filter_id'} )
+                  if ( $decoded->{'filter_id'} );
+            }
+
+            when ('msg') {
+                readingsBulkUpdate( $hash, 'eventId', $decoded->{'event_id'} )
+                  if ( $decoded->{'event_id'} );
+
+                #m.relates_to
+            }
+
+            when ('question') {
+                readingsBulkUpdate( $hash, 'questionId',
+                    $decoded->{'event_id'} )
+                  if ( $decoded->{'event_id'} );
+
+                #m.relates_to
+            }
+
+            when ('questionEnd') {
+                readingsBulkUpdate( $hash, 'eventId', $decoded->{'event_id'} )
+                  if ( $decoded->{'event_id'} );
+                readingsBulkUpdate( $hash, 'questionId', '' )
+                  if ( $decoded->{'event_id'} );
+
+                #m.relates_to
+            }
+
         }
-
-        if ( $def eq 'filter' ) {
-            readingsBulkUpdate( $hash, 'filterId', $decoded->{'filter_id'} )
-              if ( $decoded->{'filter_id'} );
-        }
-
-        if ( $def eq 'msg' ) {
-            readingsBulkUpdate( $hash, 'eventId', $decoded->{'event_id'} )
-              if ( $decoded->{'event_id'} );
-
-            #m.relates_to
-        }
-
-        if ( $def eq 'question' ) {
-            readingsBulkUpdate( $hash, 'questionId', $decoded->{'event_id'} )
-              if ( $decoded->{'event_id'} );
-
-            #m.relates_to
-        }
-
-        if ( $def eq 'questionEnd' ) {
-            readingsBulkUpdate( $hash, 'eventId', $decoded->{'event_id'} )
-              if ( $decoded->{'event_id'} );
-            readingsBulkUpdate( $hash, 'questionId', '' )
-              if ( $decoded->{'event_id'} );
-
-            #m.relates_to
-        }
-
-        ::Log( 1,
-            '!!!DEBUG - TOKEN aus Hash: ' . $hash->{helper}->{access_token} );
-        ::Log( 1, '!!!DEBUG - TOKEN aus Decode: ' . $decoded->{access_token} )
-          if ( $decoded->{access_token} );
     }
 
     readingsEndUpdate( $hash, 1 );
@@ -1465,6 +1564,23 @@ qq($name $hash->{helper}->{"access_token"} syncEnd $param->{msgnumber}: $hash->{
       ;    # only one sync at a time!
 
     # _PerformHttpRequest or InternalTimer if FAIL >= 3
+    _PerformHttpRequestOrInternalTimerFAIL( $hash, $def, $value, $nextRequest );
+
+    return;
+}
+
+sub _PerformHttpRequestOrInternalTimerFAIL {
+    return 0
+      unless ( __PACKAGE__ eq caller(0) )
+      ;    # nur das eigene Package darf private Funktionen aufrufen (CoolTux)
+
+    my $hash        = shift;
+    my $def         = shift;
+    my $value       = shift;
+    my $nextRequest = shift;
+
+    my $name = $hash->{NAME};
+
     Log3( $name, 4, "$name : Matrix::ParseHttpResponse $hash" );
     if ( AttrVal( $name, 'matrixPoll', 0 ) == 1 ) {
         if ( $nextRequest ne '' && $hash->{helper}->{softfail} < 3 ) {
