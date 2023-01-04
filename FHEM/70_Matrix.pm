@@ -23,7 +23,7 @@
 # Usage:
 #
 ##########################################################################
-# $Id: 98_Matrix.pm 14063 2022-11-12 12:52:00Z Man-fred $
+# $Id$
 
 package FHEM::Matrix;
 use strict;
@@ -62,6 +62,8 @@ sub Initialize {
 }
 
 1;
+
+__END__
 
 =pod
 =item summary Provides a Matrix-Chatbot.
@@ -359,4 +361,48 @@ sub Initialize {
 </ul>
 
 =end html_DE
+
+=for :application/json;q=META.json 70_Matrix.pm.pm
+{
+  "abstract": "Provides a Matrix-Chatbot",
+  "x_lang": {
+    "de": {
+      "abstract": "Stellt einen Matrix-Chatbot bereit"
+    }
+  },
+  "version": "v0.15.3",
+  "author": [
+    "Manfred Bielemeier"
+  ],
+  "x_fhem_maintainer": [
+    "<a href=https://forum.fhem.de/index.php?action=profile;u=41965>mBielemeier </a>"
+  ],
+  "x_fhem_maintainer_github": [
+    "Man-fred"
+  ],
+  "prereqs": {
+    "runtime": {
+      "requires": {
+        "FHEM::Meta": 0,
+        "HttpUtils": 0,
+        "strict": 0,
+        "warnings": 0,
+        "experimental": 0,
+        "carp": 0,
+        "POSIX": 0,
+        "JSON::PP": 0,
+        "encode": 0,
+      },
+      "recommends": {
+        "JSON": 0
+      },
+      "suggests": {
+        "JSON::XS": 0,
+        "Cpanel::JSON::XS": 0
+      }
+    }
+  }
+}
+=end :application/json;q=META.json
+
 =cut
