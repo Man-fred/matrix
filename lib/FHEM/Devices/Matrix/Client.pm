@@ -16,6 +16,7 @@ use strict;
 use warnings;
 
 use HttpUtils;
+use FHEM::Meta;
 use JSON;
 use GPUtils                               qw(GP_Import);
 use FHEM::Core::Authentication::Passwords qw(:ALL);
@@ -122,8 +123,9 @@ sub Define {
     my $version;
 
     return $@ unless ( FHEM::Meta::SetInternals($hash) );
+
     $version = FHEM::Meta::Get( $hash, 'version' );
-    use version 0.77; our $VERSION = $version;
+    our $VERSION = $version;
 
     return 'too few parameters: define <name> Matrix <server> <user>'
       if ( scalar( @{$aArg} ) != 4 );
@@ -133,7 +135,7 @@ sub Define {
     $hash->{SERVER}  = $aArg->[2];   # Internals sollten groß geschrieben werden
     $hash->{URL}     = 'https://' . $hash->{SERVER} . '/_matrix/client/';
     $hash->{USER}    = $aArg->[3];
-    $hash->{VERSION} = $VERSION;
+    $hash->{VERSION} = version->parse($VERSION)->normal;
 
     $hash->{helper}->{passwdobj} =
       FHEM::Core::Authentication::Passwords->new( $hash->{TYPE} );
@@ -176,14 +178,6 @@ sub _Init {    # wir machen daraus eine privat function (CoolTux)
 
     Log3( $name, 4,
         "$name : Matrix::_Init $hash " . AttrVal( $name, 'matrixPoll', '-1' ) );
-
-    # Update necessary?
-    Log3( $name, 1,
-            $name
-          . ': Start V'
-          . $hash->{VERSION} . ' -> V'
-          . FHEM::Meta::Get( $hash, 'version' ) )
-      if ( $hash->{VERSION} );
 
     return ::readingsSingleUpdate( $hash, 'state', 'please set password first',
         1 )
