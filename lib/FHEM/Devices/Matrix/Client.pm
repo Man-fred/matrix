@@ -1588,6 +1588,7 @@ sub _PerformHttpRequestOrInternalTimerFAIL {
                 $def                      = $hash->{helper}->{repeat}->{def};
                 $value                    = $hash->{helper}->{repeat}->{value};
                 $hash->{helper}->{repeat} = undef;
+
                 _PerformHttpRequest( $hash, $def, $value );
             }
             else {
@@ -1613,6 +1614,18 @@ sub _PerformHttpRequestOrInternalTimerFAIL {
             RemoveInternalTimer($hash);
             InternalTimer( gettimeofday() + $pauseLogin,
                 \&FHEM::Devices::Matrix::Client::Login, $hash );
+        }
+    }
+    elsif ( $hash->{helper}->{softfail} < 3 ) {
+        if ( $nextRequest eq 'login' ) {
+            _PerformHttpRequest( $hash, $nextRequest, '' );
+        }
+        elsif ( $nextRequest eq 'sync' && $hash->{helper}->{repeat} ) {
+            $def                      = $hash->{helper}->{repeat}->{def};
+            $value                    = $hash->{helper}->{repeat}->{value};
+            $hash->{helper}->{repeat} = undef;
+
+            _PerformHttpRequest( $hash, $def, $value );
         }
     }
 
