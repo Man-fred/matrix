@@ -362,7 +362,7 @@ __END__
 
 =end html_DE
 
-=for :application/json;q=META.json 70_Matrix.pm.pm
+=for :application/json;q=META.json 70_Matrix.pm
 {
   "abstract": "Provides a Matrix-Chatbot",
   "x_lang": {
@@ -391,7 +391,7 @@ __END__
         "carp": 0,
         "POSIX": 0,
         "JSON::PP": 0,
-        "encode": 0,
+        "encode": 0
       },
       "recommends": {
         "JSON": 0
