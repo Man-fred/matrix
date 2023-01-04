@@ -23,7 +23,7 @@
 # Usage:
 #
 ##########################################################################
-# $Id: 98_Matrix.pm 14063 2022-11-12 12:52:00Z Man-fred $
+# $Id$
 
 package FHEM::Matrix;
 use strict;
@@ -33,36 +33,37 @@ use FHEM::Meta;
 use GPUtils qw(GP_Export);
 
 use JSON;
-require FHEM::Devices::Matrix::Matrix;
+require FHEM::Devices::Matrix::Client;
 
 #-- Run before package compilation
 BEGIN {
-
-    #-- Export to main context with different name
-    GP_Export(qw(
-        Initialize
-    ));
+    sub ::Matrix_Initialize { goto &Initialize }
 }
 
 sub Initialize {
     my ($hash) = @_;
-    
-    $hash->{DefFn}      = \&FHEM::Devices::Matrix::Define;
-    $hash->{UndefFn}    = \&FHEM::Devices::Matrix::Undef;
-    $hash->{Delete}     = \&FHEM::Devices::Matrix::Delete;
-    $hash->{SetFn}      = \&FHEM::Devices::Matrix::Set;
-    $hash->{GetFn}      = \&FHEM::Devices::Matrix::Get;
-    $hash->{AttrFn}     = \&FHEM::Devices::Matrix::Attr;
-    $hash->{ReadFn}     = \&FHEM::Devices::Matrix::Read;
-    $hash->{RenameFn}   = \&FHEM::Devices::Matrix::Rename;
-    $hash->{NotifyFn}   = \&FHEM::Devices::Matrix::Notify;
 
-    $hash->{AttrList}   = FHEM::Devices::Matrix::Attr_List();
+    $hash->{DefFn}    = \&FHEM::Devices::Matrix::Client::Define;
+    $hash->{UndefFn}  = \&FHEM::Devices::Matrix::Client::Undef;
+    $hash->{Delete}   = \&FHEM::Devices::Matrix::Client::Delete;
+    $hash->{SetFn}    = \&FHEM::Devices::Matrix::Client::Set;
+    $hash->{GetFn}    = \&FHEM::Devices::Matrix::Client::Get;
+    $hash->{AttrFn}   = \&FHEM::Devices::Matrix::Client::Attr;
+    $hash->{ReadFn}   = \&FHEM::Devices::Matrix::Client::Read;
+    $hash->{RenameFn} = \&FHEM::Devices::Matrix::Client::Rename;
+    $hash->{NotifyFn} = \&FHEM::Devices::Matrix::Client::Notify;
+
+    $hash->{AttrList} = FHEM::Devices::Matrix::Client::Attr_List();
+
+    $hash->{parseParams} =
+      1;    # wir verwenden parseParams für Set und Get (CoolTux)
+
     return FHEM::Meta::InitMod( __FILE__, $hash );
 }
 
-
 1;
+
+__END__
 
 =pod
 =item summary Provides a Matrix-Chatbot.
@@ -360,4 +361,48 @@ sub Initialize {
 </ul>
 
 =end html_DE
+
+=for :application/json;q=META.json 70_Matrix.pm
+{
+  "abstract": "Provides a Matrix-Chatbot",
+  "x_lang": {
+    "de": {
+      "abstract": "Stellt einen Matrix-Chatbot bereit"
+    }
+  },
+  "version": "v0.15.4",
+  "author": [
+    "Manfred Bielemeier"
+  ],
+  "x_fhem_maintainer": [
+    "<a href=https://forum.fhem.de/index.php?action=profile;u=41965>mBielemeier </a>"
+  ],
+  "x_fhem_maintainer_github": [
+    "Man-fred"
+  ],
+  "prereqs": {
+    "runtime": {
+      "requires": {
+        "FHEM::Meta": 0,
+        "HttpUtils": 0,
+        "strict": 0,
+        "warnings": 0,
+        "experimental": 0,
+        "carp": 0,
+        "POSIX": 0,
+        "JSON::PP": 0,
+        "encode": 0
+      },
+      "recommends": {
+        "JSON": 0
+      },
+      "suggests": {
+        "JSON::XS": 0,
+        "Cpanel::JSON::XS": 0
+      }
+    }
+  }
+}
+=end :application/json;q=META.json
+
 =cut
