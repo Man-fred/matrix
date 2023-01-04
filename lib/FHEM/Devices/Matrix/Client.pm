@@ -179,7 +179,10 @@ sub _Init {    # wir machen daraus eine privat function (CoolTux)
 
     # Update necessary?
     Log3( $name, 1,
-        $name . ': Start V' . $hash->{VERSION} . ' -> V' . $VERSION )
+            $name
+          . ': Start V'
+          . $hash->{VERSION} . ' -> V'
+          . FHEM::Meta::Get( $hash, 'version' ) )
       if ( $hash->{VERSION} );
 
     return ::readingsSingleUpdate( $hash, 'state', 'please set password first',
@@ -1631,6 +1634,9 @@ sub _SyncNextRequest {
 
     my $hash        = shift;
     my $nextRequest = shift;
+
+    my $def;
+    my $value;
 
     if ( $nextRequest eq 'sync' && $hash->{helper}->{repeat} ) {
         $def                      = $hash->{helper}->{repeat}->{def};
