@@ -2,7 +2,7 @@
 # Usage:
 #
 ##########################################################################
-# $Id: Matrix.pm 22821 2022-11-12 12:52:00Z Man-fred $
+# $Id$
 #
 # from the developerpages:
 # Verwendung von lowerCamelCaps für a) die Bezeichnungen der Behälter für Readings, Fhem und Helper und der Untereintraege,
@@ -108,8 +108,6 @@ BEGIN {
     );
 }
 
-my $VERSION = '0.0.15';
-
 sub Attr_List {
     return
 "matrixLogin:password matrixRoom matrixPoll:0,1 matrixSender matrixMessage matrixQuestion_ matrixQuestion_[0-9]+ matrixAnswer_ matrixAnswer_[0-9]+ $readingFnAttributes";
@@ -120,6 +118,12 @@ sub Define {
     #(CoolTux) bei einfachen übergaben nimmt man die Daten mit shift auf
     my $hash = shift;
     my $aArg = shift;
+
+    my $version;
+
+    return $@ unless ( FHEM::Meta::SetInternals($hash) );
+    $version = FHEM::Meta::Get( $hash, 'version' );
+    use version 0.77; our $VERSION = $version;
 
     return 'too few parameters: define <name> Matrix <server> <user>'
       if ( scalar( @{$aArg} ) != 4 );
@@ -1584,13 +1588,7 @@ sub _PerformHttpRequestOrInternalTimerFAIL {
     Log3( $name, 4, "$name : Matrix::ParseHttpResponse $hash" );
     if ( AttrVal( $name, 'matrixPoll', 0 ) == 1 ) {
         if ( $nextRequest ne '' && $hash->{helper}->{softfail} < 3 ) {
-            if ( $nextRequest eq 'sync' && $hash->{helper}->{repeat} ) {
-                $def                      = $hash->{helper}->{repeat}->{def};
-                $value                    = $hash->{helper}->{repeat}->{value};
-                $hash->{helper}->{repeat} = undef;
-                _PerformHttpRequest( $hash, $def, $value );
-            }
-            else {
+            if ( !_SyncNextRequest( $hash, $nextRequest ) ) {
                 _PerformHttpRequest( $hash, $nextRequest, '' );
             }
         }
@@ -1614,6 +1612,32 @@ sub _PerformHttpRequestOrInternalTimerFAIL {
             InternalTimer( gettimeofday() + $pauseLogin,
                 \&FHEM::Devices::Matrix::Client::Login, $hash );
         }
+    }
+    elsif ( $hash->{helper}->{softfail} < 3 ) {
+        if ( $nextRequest eq 'login' ) {
+            _PerformHttpRequest( $hash, $nextRequest, '' );
+        }
+
+        _SyncNextRequest( $hash, $nextRequest );
+    }
+
+    return;
+}
+
+sub _SyncNextRequest {
+    return 0
+      unless ( __PACKAGE__ eq caller(0) )
+      ;    # nur das eigene Package darf private Funktionen aufrufen (CoolTux)
+
+    my $hash        = shift;
+    my $nextRequest = shift;
+
+    if ( $nextRequest eq 'sync' && $hash->{helper}->{repeat} ) {
+        $def                      = $hash->{helper}->{repeat}->{def};
+        $value                    = $hash->{helper}->{repeat}->{value};
+        $hash->{helper}->{repeat} = undef;
+
+        return _PerformHttpRequest( $hash, $def, $value );
     }
 
     return;
