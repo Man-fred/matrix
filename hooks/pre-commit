@@ -1,20 +1,20 @@
-parseParams#!/usr/bin/perl -w
+#!/usr/bin/perl -w
 
 use File::Basename;
 use POSIX qw(strftime);
 use strict;
 
-my @filenames = ( 'FHEM/98_Matrix.pm',
-                  'lib/FHEM/Devices/Matrix.pm'   
-                );
+my @filenames = (   'FHEM/70_Matrix.pm',
+		    'lib/FHEM/Devices/Matrix/Client.pm',
+    );
 
-my $controlsfile = 'controls_Matrix.txt';
+my $controlsfile    = 'controls_Matrix.txt';
 
 open(FH, ">$controlsfile") || return("Can't open $controlsfile: $!");
 
 for my  $filename (@filenames) {
     my @statOutput = stat($filename);
-
+  
     if (scalar @statOutput != 13) {
         printf 'error: stat has unexpected return value for ' . $filename . "\n";
         next;
