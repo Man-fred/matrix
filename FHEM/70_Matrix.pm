@@ -370,7 +370,7 @@ __END__
       "abstract": "Stellt einen Matrix-Chatbot bereit"
     }
   },
-  "version": "v0.15.3",
+  "version": "v0.15.4",
   "author": [
     "Manfred Bielemeier"
   ],
